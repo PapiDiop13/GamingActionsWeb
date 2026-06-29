@@ -14,6 +14,8 @@ import {
 import { FRAMES, VIDEO_FRAMES, COMMENT_FRAMES } from '@/lib/frames';
 import FramedAvatar from '@/components/ui/FramedAvatar';
 
+const CF_BASE = 'https://us-central1-gamingactions-app.cloudfunctions.net';
+
 /* ── helpers ── */
 async function logPurchase(userId, item, itemType, balanceAfter) {
   if (!userId) return;
@@ -286,6 +288,52 @@ export default function ShopPage() {
     </div>
   );
 
+  /* ── stripe return handling ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const purchased = params.get('purchased');
+    const canceled = params.get('canceled');
+    if (purchased) {
+      showToast(`✅ Achat réussi ! Ton cosmétique sera débloqué sous peu.`, 'success', 5000);
+      refreshProfile?.();
+      window.history.replaceState({}, '', '/shop');
+    } else if (canceled === 'true') {
+      showToast('Paiement annulé.', 'info');
+      window.history.replaceState({}, '', '/shop');
+    }
+  }, []);
+
+  /* ── stripe checkout ── */
+  const handleStripeCheckout = async (item, itemType = 'cosmetic') => {
+    if (!user) { router.push('/auth?mode=register'); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${CF_BASE}/createCosmeticCheckoutSession`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          itemId: `${itemType}:${item.id}`,
+          itemName: item.name,
+          amountCents: Math.round((item.dollarsPrice || 0) * 100),
+          successUrl: `${window.location.origin}/shop?purchased=${item.id}`,
+          cancelUrl: `${window.location.origin}/shop`,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Erreur checkout');
+      }
+    } catch (e) {
+      showToast(`Erreur : ${e.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   /* ── purchase helpers ── */
   const equipCosmetic = async (item, extraFields = {}) => {
     const catMap = { background: 'equippedProfileBg', banner: 'equippedProfileBanner', badge: 'equippedProfileBadge', username: 'equippedUsernameEffect', card: 'equippedCardBorder' };
@@ -307,7 +355,7 @@ export default function ShopPage() {
       showToast(`✅ "${item.name}" equipped!`, 'success');
       return;
     }
-    if (item.dollarsPrice && !isAdmin) { showToast('🔜 Coming Soon — purchasable very soon!', 'info'); return; }
+    if (item.dollarsPrice && !isAdmin) { handleStripeCheckout(item, 'cosmetic'); return; }
     if (item.legendaryFree && userPlan !== 'legendary') {
       setModal({ title: '👑 Legendary Required', message: 'This item is free for Legendary subscribers. Upgrade to unlock it instantly.', action: 'See Legendary', onConfirm: () => { setModal(null); router.push('/legendary'); } });
       return;
@@ -342,7 +390,7 @@ export default function ShopPage() {
       setLoading(true); await saveProfile({ equippedFrame: newId }); await refreshProfile?.(); setLoading(false);
       showToast(newId === 'none' ? 'Frame removed' : `✅ "${frame.name}" equipped!`, 'success'); return;
     }
-    if (frame.animated && !isAdmin) { showToast(`🔜 Coming Soon — CA$${frame.dollarsPrice?.toFixed(2)}`, 'info'); return; }
+    if (frame.animated && frame.dollarsPrice && !isAdmin) { handleStripeCheckout(frame, 'avatar_frame'); return; }
     if (!isAdmin && gaPoints < frame.pointsPrice) { showToast(`Not enough GA Points — need ${frame.pointsPrice}`, 'error'); return; }
     setModal({
       title: `Buy "${frame.name}"?`, message: `Cost: ${frame.pointsPrice} pts\nYour balance: ${gaPoints} pts`,
@@ -367,7 +415,7 @@ export default function ShopPage() {
     if (frame.exclusive) { showToast('🔒 Champion exclusive', 'info'); return; }
     const owned = isAdmin || frame.free || ownedVideoFrames.includes(frame.id);
     if (owned) { showToast(`✅ "${frame.name}" available when uploading!`, 'success'); return; }
-    if (frame.animated && !isAdmin) { showToast(`🔜 Coming Soon — CA$${frame.dollarsPrice?.toFixed(2)}`, 'info'); return; }
+    if (frame.animated && frame.dollarsPrice && !isAdmin) { handleStripeCheckout(frame, 'video_frame'); return; }
     if (!isAdmin && gaPoints < frame.pointsPrice) { showToast(`Need ${frame.pointsPrice} pts`, 'error'); return; }
     setModal({
       title: `Buy "${frame.name}"?`, message: `Cost: ${frame.pointsPrice} pts — available when uploading clips.`,
@@ -393,7 +441,7 @@ export default function ShopPage() {
       setLoading(true); await saveProfile({ equippedCommentFrame: frame.id }); await refreshProfile?.(); setLoading(false);
       showToast(`✅ "${frame.name}" is your comment frame!`, 'success'); return;
     }
-    if (frame.animated && !isAdmin) { showToast(`🔜 Coming Soon — CA$${frame.dollarsPrice?.toFixed(2)}`, 'info'); return; }
+    if (frame.animated && frame.dollarsPrice && !isAdmin) { handleStripeCheckout(frame, 'comment_frame'); return; }
     if (!isAdmin && gaPoints < frame.pointsPrice) { showToast(`Need ${frame.pointsPrice} pts`, 'error'); return; }
     setModal({
       title: `Buy "${frame.name}"?`, message: `Cost: ${frame.pointsPrice} pts — shows as a glowing border on all your comments.`,
@@ -414,7 +462,7 @@ export default function ShopPage() {
   };
 
   const handleTheme = async (theme) => {
-    if (theme.dollarsPrice && !isAdmin) { showToast('🔜 Coming Soon!', 'info'); return; }
+    if (theme.dollarsPrice && !isAdmin) { handleStripeCheckout(theme, 'theme'); return; }
     const owned = isAdmin || ownedCosmetics.includes(theme.id);
     setModal({
       title: `Apply "${theme.name}"?`,
