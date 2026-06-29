@@ -704,19 +704,16 @@ export default function ShopPage() {
       {cat === 'themes' && (
         <div>
           <InfoBanner icon="🔥" text="Themes are complete packs — background, banner, title, card border and username effect all at once. Best value." gold />
-          <div style={{ padding: '0 14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, padding: '8px 14px 14px' }}>
             {filterItems(PROFILE_THEMES, t => isAdmin || ownedCosmetics.includes(t.id)).map(theme => {
               const owned = isAdmin || ownedCosmetics.includes(theme.id);
               return (
-                <button key={theme.id} onClick={() => handleTheme(theme)} style={{ ...CARD(null), width: '100%', marginBottom: 12 }}>
-                  <div style={{ ...PREVIEW_WRAP, height: 90 }}><ThemePreview item={theme} /></div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 3 }}>
-                    <span style={{ ...NAME, textAlign: 'left' }}>{theme.name}</span>
-                    <RarityBadge rarity={theme.rarity || 'legendary'} />
-                  </div>
-                  <p style={{ ...DESC, textAlign: 'left', width: '100%' }}>{theme.desc}</p>
-                  <span style={{ fontSize: 10, color: '#555566', marginBottom: 6, display: 'block' }}>Includes {(theme.includes || []).length} items</span>
-                  {owned ? <div style={BTN('#C9A84C', 'rgba(201,168,76,0.15)')}>🎨 APPLY THEME</div>
+                <button key={theme.id} onClick={() => handleTheme(theme)} style={CARD(owned ? '#C9A84C' : null)}>
+                  <div style={{ ...PREVIEW_WRAP, height: 80 }}><ThemePreview item={theme} /></div>
+                  <RarityBadge rarity={theme.rarity || 'legendary'} />
+                  <span style={NAME}>{theme.name}</span>
+                  <span style={DESC}>{(theme.includes || []).length} items</span>
+                  {owned ? <div style={BTN('#C9A84C', 'rgba(201,168,76,0.15)')}>🎨 APPLY</div>
                     : <div style={BTN('#FF2D55', 'rgba(255,45,85,0.1)')}>⚡ CA${theme.dollarsPrice?.toFixed(2)}</div>}
                 </button>
               );
