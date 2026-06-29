@@ -272,6 +272,23 @@ export default function ShopPage() {
     setTimeout(() => setToast(null), ms);
   };
 
+  /* ── stripe return handling — must be before any conditional return ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const purchased = params.get('purchased');
+    const canceled = params.get('canceled');
+    if (purchased) {
+      setToast({ msg: '✅ Achat réussi ! Ton cosmétique sera débloqué sous peu.', type: 'success' });
+      setTimeout(() => setToast(null), 5000);
+      refreshProfile?.();
+      window.history.replaceState({}, '', '/shop');
+    } else if (canceled === 'true') {
+      setToast({ msg: 'Paiement annulé.', type: 'info' });
+      setTimeout(() => setToast(null), 3000);
+      window.history.replaceState({}, '', '/shop');
+    }
+  }, []);
+
   const isAdmin = ['gameconic', 'admin'].includes(userProfile?.accountType) || !!userProfile?.isAdmin;
   const gaPoints = userProfile?.gaPoints || 0;
   const userPlan = userProfile?.plan || 'free';
@@ -287,21 +304,6 @@ export default function ShopPage() {
       <button onClick={() => router.push('/auth')} style={{ padding: '13px 30px', background: 'linear-gradient(135deg, #C9A84C, #E8C96A)', color: '#000', fontWeight: 900, fontSize: 15, borderRadius: 14, border: 'none', cursor: 'pointer' }}>Log in / Sign up</button>
     </div>
   );
-
-  /* ── stripe return handling ── */
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const purchased = params.get('purchased');
-    const canceled = params.get('canceled');
-    if (purchased) {
-      showToast(`✅ Achat réussi ! Ton cosmétique sera débloqué sous peu.`, 'success', 5000);
-      refreshProfile?.();
-      window.history.replaceState({}, '', '/shop');
-    } else if (canceled === 'true') {
-      showToast('Paiement annulé.', 'info');
-      window.history.replaceState({}, '', '/shop');
-    }
-  }, []);
 
   /* ── stripe checkout ── */
   const handleStripeCheckout = async (item, itemType = 'cosmetic') => {
