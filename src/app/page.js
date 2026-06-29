@@ -806,6 +806,7 @@ export default function FeedPage() {
   const [following, setFollowing] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const feedRef = useRef(null);
+  const hasShuffled = useRef(false);
 
   // Load user's following list
   useEffect(() => {
@@ -823,17 +824,34 @@ export default function FeedPage() {
   // Load videos
   useEffect(() => {
     setLoading(true);
+    hasShuffled.current = false;
     const q = query(collection(db, 'videos'), orderBy('createdAt', 'desc'), limit(60));
     const unsub = onSnapshot(q, snap => {
       const docs = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(v => !v.banned && !v.restricted && (v.muxPlaybackId || v.videoUrl));
-      // Shuffle: Fisher-Yates
-      for (let i = docs.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [docs[i], docs[j]] = [docs[j], docs[i]];
+
+      if (!hasShuffled.current) {
+        // First load only: shuffle randomly
+        for (let i = docs.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [docs[i], docs[j]] = [docs[j], docs[i]];
+        }
+        hasShuffled.current = true;
+        setAllVideos(docs);
+      } else {
+        // Subsequent Firestore updates (ggCount, viewCount…): preserve order,
+        // just update video data in-place — never reshuffle (avoids HLS restart)
+        setAllVideos(prev => {
+          const map = new Map(docs.map(d => [d.id, d]));
+          const updated = prev
+            .filter(v => map.has(v.id))          // remove deleted videos
+            .map(v => map.get(v.id));             // refresh data, keep order
+          const prevIds = new Set(prev.map(v => v.id));
+          const newVids = docs.filter(d => !prevIds.has(d.id)); // append new ones
+          return [...updated, ...newVids];
+        });
       }
-      setAllVideos(docs);
       setLoading(false);
     }, () => setLoading(false));
     return () => unsub();
