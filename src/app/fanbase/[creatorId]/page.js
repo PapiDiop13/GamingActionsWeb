@@ -146,7 +146,7 @@ export default function FanbasePage({ params }) {
 
       {/* Price */}
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', padding: '24px 0 20px', borderBottom: '1px solid var(--gray3)' }}>
-        <span style={{ fontSize: 48, fontWeight: 900, color: '#7C4DFF' }}>$4.99</span>
+        <span style={{ fontSize: 48, fontWeight: 900, color: '#7C4DFF' }}>CA$3.99</span>
         <span style={{ fontSize: 16, color: 'var(--gray)', marginLeft: 4 }}>/mois</span>
       </div>
 
