@@ -19,6 +19,9 @@
     "react-hot-toast": "^2.4.1",
     "clsx": "^2.1.1"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "typescript": "^5",
     "@types/node": "^20",

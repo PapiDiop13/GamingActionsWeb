@@ -263,7 +263,14 @@ function VideoPlayer({ video, isActive, shouldLoad, onDoubleTap, frameColor, isC
         el.src = url;
         el.addEventListener('loadedmetadata', tryPlay, { once: true });
       } else if (typeof window !== 'undefined' && window.Hls?.isSupported()) {
-        const hls = new window.Hls({ maxBufferLength: 20, enableWorker: false });
+        const hls = new window.Hls({
+          maxBufferLength: 60,
+          maxMaxBufferLength: 120,
+          maxBufferSize: 60 * 1000 * 1000, // 60 MB
+          enableWorker: true,
+          lowLatencyMode: false,
+          backBufferLength: 30,
+        });
         hls.loadSource(url);
         hls.attachMedia(el);
         hls.on(window.Hls.Events.MANIFEST_PARSED, tryPlay);
