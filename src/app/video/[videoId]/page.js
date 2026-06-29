@@ -114,8 +114,20 @@ export default function VideoPage() {
   const [ggCooldown, setGgCooldown] = useState(false);
   const [ggCount, setGgCount]     = useState(0);
   const [hasGG, setHasGG]         = useState(false);
+  const [reportModal, setReportModal]     = useState(false);
+  const [reportReason, setReportReason]   = useState(null);
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportSent, setReportSent]       = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const videoRef = useRef(null);
   const hlsRef   = useRef(null);
+
+  // Auto-open report modal on #report hash
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#report') {
+      setReportModal(true);
+    }
+  }, []);
 
   // Load video
   useEffect(() => {
@@ -237,6 +249,39 @@ export default function VideoPage() {
     setSending(false);
   };
 
+  const REPORT_REASONS = [
+    'Contenu inapproprié ou explicite',
+    'Harcèlement ou discours haineux',
+    'Spam ou contenu trompeur',
+    'Violence ou contenu dangereux',
+    'Violation de droits d\'auteur / IP',
+    'Gameplay faux ou modifié pour tricher',
+    'Autre',
+  ];
+
+  const handleReport = async () => {
+    if (!reportReason) return;
+    if (!user) { router.push('/auth'); return; }
+    setReportLoading(true);
+    try {
+      await addDoc(collection(db, 'reports'), {
+        reportedBy: user.uid,
+        reporterUsername: userProfile?.username || 'Unknown',
+        targetId: videoId,
+        targetType: 'video',
+        targetUsername: video?.username || null,
+        reason: reportReason,
+        details: reportDetails.trim(),
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      try { await updateDoc(doc(db, 'videos', videoId), { reportCount: increment(1) }); } catch {}
+      setReportSent(true);
+      setTimeout(() => { setReportModal(false); setReportSent(false); setReportReason(null); setReportDetails(''); }, 2000);
+    } catch (e) { toast.error('Erreur lors du signalement'); }
+    setReportLoading(false);
+  };
+
   if (!video) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -314,23 +359,46 @@ export default function VideoPage() {
                   </div>
                 </Link>
 
-                {/* GG button */}
-                <button
-                  onClick={handleGG}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '10px 24px', borderRadius: 24,
-                    fontWeight: 900, fontSize: 15, cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    background: hasGG ? 'var(--gold)' : 'transparent',
-                    color: hasGG ? 'var(--black)' : 'var(--gold)',
-                    border: `2px solid var(--gold)`,
-                    opacity: ggCooldown ? 0.7 : 1,
-                  }}
-                >
-                  <span>⚡</span>
-                  <span>{ggCount} GG{ggCount !== 1 ? 's' : ''}</span>
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* GG button */}
+                  <button
+                    onClick={handleGG}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '10px 24px', borderRadius: 24,
+                      fontWeight: 900, fontSize: 15, cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      background: hasGG ? 'var(--gold)' : 'transparent',
+                      color: hasGG ? 'var(--black)' : 'var(--gold)',
+                      border: `2px solid var(--gold)`,
+                      opacity: ggCooldown ? 0.7 : 1,
+                    }}
+                  >
+                    <span>⚡</span>
+                    <span>{ggCount} GG{ggCount !== 1 ? 's' : ''}</span>
+                  </button>
+
+                  {/* Report button */}
+                  {user && video?.userId !== user?.uid && (
+                    <button
+                      onClick={() => setReportModal(true)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '8px 14px', borderRadius: 20,
+                        fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                        transition: 'all 0.15s',
+                        background: 'transparent',
+                        color: 'var(--gray)',
+                        border: '1.5px solid var(--gray3)',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#e55'; e.currentTarget.style.borderColor = '#e55'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--gray)'; e.currentTarget.style.borderColor = 'var(--gray3)'; }}
+                    >
+                      <span>🚩</span>
+                      <span>Signaler</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {video.description && (
@@ -382,6 +450,59 @@ export default function VideoPage() {
           </div>
         </div>
       </div>
+
+      {/* Report Modal */}
+      {reportModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: 'var(--card)', borderRadius: 20, padding: 24, width: '100%', maxWidth: 480, border: '1px solid var(--gray3)' }}>
+            {reportSent ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                <p style={{ fontWeight: 800, color: 'var(--white)', fontSize: 16 }}>Signalement envoyé</p>
+                <p style={{ color: 'var(--gray)', fontSize: 13, marginTop: 6 }}>Merci, notre équipe va examiner ce clip.</p>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <h3 style={{ fontWeight: 900, fontSize: 18, color: 'var(--white)', margin: 0 }}>🚩 Signaler ce clip</h3>
+                  <button onClick={() => setReportModal(false)} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 22, cursor: 'pointer' }}>✕</button>
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16 }}>Pourquoi signales-tu ce clip ?</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  {REPORT_REASONS.map(reason => (
+                    <button
+                      key={reason}
+                      onClick={() => setReportReason(reason)}
+                      style={{
+                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
+                        background: reportReason === reason ? 'rgba(201,168,76,0.12)' : 'var(--dark)',
+                        border: `1.5px solid ${reportReason === reason ? 'var(--gold)' : 'var(--gray3)'}`,
+                        color: reportReason === reason ? 'var(--gold)' : 'var(--white)',
+                        fontWeight: reportReason === reason ? 700 : 400, fontSize: 13,
+                      }}
+                    >{reason}</button>
+                  ))}
+                </div>
+                <textarea
+                  value={reportDetails}
+                  onChange={e => setReportDetails(e.target.value)}
+                  placeholder="Détails supplémentaires (optionnel)"
+                  rows={3}
+                  style={{ width: '100%', borderRadius: 12, padding: '10px 14px', background: 'var(--dark)', border: '1px solid var(--gray3)', color: 'var(--white)', fontSize: 13, resize: 'none', outline: 'none', marginBottom: 16, boxSizing: 'border-box' }}
+                />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setReportModal(false)} style={{ flex: 1, padding: '12px 0', borderRadius: 12, background: 'none', border: '1px solid var(--gray3)', color: 'var(--gray)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Annuler</button>
+                  <button
+                    onClick={handleReport}
+                    disabled={!reportReason || reportLoading}
+                    style={{ flex: 1, padding: '12px 0', borderRadius: 12, background: 'var(--gold)', color: 'var(--black)', fontWeight: 900, fontSize: 13, cursor: reportReason ? 'pointer' : 'not-allowed', opacity: reportReason ? 1 : 0.5, border: 'none' }}
+                  >{reportLoading ? '...' : 'Envoyer'}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

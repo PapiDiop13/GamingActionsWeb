@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
-import { doc, deleteDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, deleteDoc, collection, query, where, getDocs, writeBatch, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import useAuthStore from '@/lib/stores/useAuthStore';
 import toast from 'react-hot-toast';
@@ -76,6 +76,59 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
 
   const isLegendary = userProfile?.plan === 'legendary' || userProfile?.isLegendary;
+  const isCreator = userProfile?.accountType === 'creator';
+  const isIcon = userProfile?.accountType === 'gameconic';
+
+  // Creator request modal
+  const [creatorModal, setCreatorModal] = useState(false);
+  const [creatorText, setCreatorText] = useState('');
+  const [creatorLoading, setCreatorLoading] = useState(false);
+
+  // Bug report modal
+  const [bugModal, setBugModal] = useState(false);
+  const [bugText, setBugText] = useState('');
+  const [bugLoading, setBugLoading] = useState(false);
+
+  // Upload help modal
+  const [uploadModal, setUploadModal] = useState(false);
+
+  const handleCreatorRequest = async () => {
+    if (!creatorText.trim()) return toast.error('Ajoute un message');
+    setCreatorLoading(true);
+    try {
+      await addDoc(collection(db, 'creator_requests'), {
+        message: creatorText.trim(),
+        userId: user?.uid,
+        username: userProfile?.username,
+        createdAt: serverTimestamp(),
+      });
+      toast.success('Demande envoyée !');
+      setCreatorModal(false);
+      setCreatorText('');
+    } catch (e) {
+      toast.error('Erreur : ' + e.message);
+    }
+    setCreatorLoading(false);
+  };
+
+  const handleBugReport = async () => {
+    if (!bugText.trim()) return toast.error('Décris le bug');
+    setBugLoading(true);
+    try {
+      await addDoc(collection(db, 'bug_reports'), {
+        message: bugText.trim(),
+        userId: user?.uid,
+        username: userProfile?.username,
+        createdAt: serverTimestamp(),
+      });
+      toast.success('Bug signalé, merci !');
+      setBugModal(false);
+      setBugText('');
+    } catch (e) {
+      toast.error('Erreur : ' + e.message);
+    }
+    setBugLoading(false);
+  };
 
   if (!user) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -209,6 +262,30 @@ export default function SettingsPage() {
         )}
       </Section>
 
+      {/* Créateur */}
+      {(isCreator || isIcon) && (
+        <Section title="Créateur">
+          <Row icon="🎬" label="Ma Fanbase" sublabel="Gère tes abonnés et ton contenu" onClick={() => router.push('/creator')} />
+          <Row icon="💰" label="Revenus Créateur" sublabel="Suivi de tes gains et paiements" onClick={() => router.push('/creator/earnings')} />
+        </Section>
+      )}
+
+      {!(isCreator || isIcon) && (
+        <Section title="Créateur">
+          <Row icon="⭐" label="Devenir Créateur" sublabel="Rejoins le programme créateur GA" onClick={() => setCreatorModal(true)} />
+        </Section>
+      )}
+
+      {/* Aide & Légal */}
+      <Section title="Aide & Légal">
+        <Row icon="📹" label="Comment uploader" sublabel="Guide étape par étape" onClick={() => setUploadModal(true)} />
+        <Row icon="🐛" label="Signaler un bug" sublabel="Aide-nous à améliorer l'app" onClick={() => setBugModal(true)} />
+        <Row icon="📋" label="Community Guidelines" onClick={() => router.push('/legal?tab=community')} />
+        <Row icon="🏆" label="Règles du concours" onClick={() => router.push('/legal?tab=contest')} />
+        <Row icon="📄" label="Conditions d'utilisation" onClick={() => router.push('/legal?tab=terms')} />
+        <Row icon="🔒" label="Politique de confidentialité" onClick={() => router.push('/legal?tab=privacy')} />
+      </Section>
+
       {/* Danger zone */}
       <Section title="Zone dangereuse">
         <Row icon="🚪" label="Se déconnecter" onClick={logout} danger />
@@ -257,6 +334,82 @@ export default function SettingsPage() {
               style={{ background: 'var(--red)', color: 'var(--white)', opacity: (loading || deleteConfirm !== 'DELETE') ? 0.5 : 1 }}
             >
               {loading ? '...' : '🗑️ Supprimer définitivement'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {creatorModal && (
+        <Modal title="⭐ Devenir Créateur" onClose={() => setCreatorModal(false)}>
+          <p className="text-sm mb-4" style={{ color: 'var(--gray)' }}>
+            Pour rejoindre le programme Créateur Gaming Actions, tu dois :<br /><br />
+            <strong style={{ color: 'var(--white)' }}>1.</strong> Poster au moins <strong style={{ color: 'var(--gold)' }}>5 clips</strong> de qualité<br />
+            <strong style={{ color: 'var(--white)' }}>2.</strong> Accumuler <strong style={{ color: 'var(--gold)' }}>100 followers</strong> sur ton profil<br />
+            <strong style={{ color: 'var(--white)' }}>3.</strong> Nous contacter via le formulaire ci-dessous
+          </p>
+          <textarea
+            className="input w-full resize-none"
+            rows={4}
+            placeholder="Présente-toi, dis-nous pourquoi tu veux devenir créateur GA..."
+            value={creatorText}
+            onChange={e => setCreatorText(e.target.value)}
+            style={{ minHeight: '100px' }}
+          />
+          <button
+            onClick={handleCreatorRequest}
+            disabled={creatorLoading || !creatorText.trim()}
+            className="btn-gold w-full py-2.5 mt-3"
+            style={{ opacity: (!creatorText.trim() || creatorLoading) ? 0.5 : 1 }}
+          >
+            {creatorLoading ? '...' : 'Envoyer ma demande'}
+          </button>
+        </Modal>
+      )}
+
+      {bugModal && (
+        <Modal title="🐛 Signaler un bug" onClose={() => setBugModal(false)}>
+          <p className="text-sm mb-4" style={{ color: 'var(--gray)' }}>
+            Décris le bug que tu as rencontré le plus précisément possible (étapes pour reproduire, appareil, etc.).
+          </p>
+          <textarea
+            className="input w-full resize-none"
+            rows={5}
+            placeholder="Ex: Quand je clique sur 'Upload', l'app se ferme sur iPhone 14..."
+            value={bugText}
+            onChange={e => setBugText(e.target.value)}
+            style={{ minHeight: '120px' }}
+          />
+          <button
+            onClick={handleBugReport}
+            disabled={bugLoading || !bugText.trim()}
+            className="btn-gold w-full py-2.5 mt-3"
+            style={{ opacity: (!bugText.trim() || bugLoading) ? 0.5 : 1 }}
+          >
+            {bugLoading ? '...' : 'Envoyer le rapport'}
+          </button>
+        </Modal>
+      )}
+
+      {uploadModal && (
+        <Modal title="📹 Comment uploader un clip" onClose={() => setUploadModal(false)}>
+          <div className="flex flex-col gap-4">
+            {[
+              { step: '1', title: 'Crée ton clip gaming', desc: 'Capture ton meilleur moment de jeu — victoire épique, skill shot, moment drôle... La durée max est de 60 secondes.' },
+              { step: '2', title: 'Va dans Creator Studio', desc: 'Depuis ton profil, appuie sur le bouton "+" ou accède au Creator Studio via le menu principal.' },
+              { step: '3', title: 'Upload et publie', desc: 'Sélectionne ton fichier vidéo, ajoute un titre accrocheur, choisis tes tags et ton jeu, puis appuie sur Publier !' },
+            ].map(({ step, title, desc }) => (
+              <div key={step} className="flex gap-3 items-start">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-black text-sm" style={{ background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}>
+                  {step}
+                </div>
+                <div>
+                  <p className="font-bold text-sm" style={{ color: 'var(--white)' }}>{title}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--gray)' }}>{desc}</p>
+                </div>
+              </div>
+            ))}
+            <button onClick={() => { setUploadModal(false); router.push('/creator'); }} className="btn-gold w-full py-2.5 mt-1">
+              Ouvrir Creator Studio
             </button>
           </div>
         </Modal>
