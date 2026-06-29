@@ -3,10 +3,11 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import useAuthStore from '@/lib/stores/useAuthStore';
 import toast from 'react-hot-toast';
+
+const CF_BASE = 'https://us-central1-gamingactions-app.cloudfunctions.net';
 
 const GENRES = ['FPS', 'Sports', 'RPG', 'MOBA', 'Battle Royale', 'Racing', 'Fighting', 'Strategy', 'Action', 'Other'];
 const CONSOLES = ['PS5', 'PS4', 'Xbox Series X', 'Xbox Series S', 'Xbox One', 'Nintendo Switch', 'PC', 'Mobile'];
@@ -84,17 +85,36 @@ export default function UploadPage() {
     if (!form.title.trim()) { toast.error('Titre requis'); return; }
     setStep(3); setUploading(true); setUploadPct(0);
     try {
-      const path = `videos/${user.uid}/${Date.now()}_${file.name}`;
-      const sRef = ref(storage, path);
-      const task = uploadBytesResumable(sRef, file);
-      task.on('state_changed', snap => setUploadPct(Math.round(snap.bytesTransferred / snap.totalBytes * 100)));
-      await task;
-      const videoUrl = await getDownloadURL(sRef);
+      // ── 1. Obtenir l'URL d'upload Mux ──────────────────────────────────
+      const urlRes = await fetch(`${CF_BASE}/muxGetUploadUrl`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid }),
+      });
+      if (!urlRes.ok) throw new Error("Impossible d'obtenir l'URL Mux : " + urlRes.status);
+      const { uploadUrl, uploadId } = await urlRes.json();
+      if (!uploadUrl) throw new Error('uploadUrl manquant dans la réponse Mux');
+
+      // ── 2. PUT binaire vers Mux avec progression (XHR) ─────────────────
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error('Mux upload failed: ' + xhr.status));
+        };
+        xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload Mux'));
+        xhr.send(file);
+      });
+
+      // ── 3. Doc Firestore — muxPlaybackId sera rempli par le webhook ─────
       await addDoc(collection(db, 'videos'), {
         userId: user.uid,
         username: userProfile?.username || '',
-        userAvatar: userProfile?.avatarUrl || '',
-        videoUrl,
+        userAvatar: userProfile?.avatarUrl || userProfile?.avatar || '',
         title: form.title.trim(),
         description: form.description.trim(),
         genre: form.genre,
@@ -103,17 +123,24 @@ export default function UploadPage() {
         visibility: 'public',
         contentType,
         isFanbaseExclusive: form.isFanbaseExclusive,
+        videoUrl: null,
+        publicId: uploadId,
+        muxUploadId: uploadId,
+        muxPlaybackId: null,
+        muxStatus: 'processing',
         ggCount: 0, commentCount: 0, viewCount: 0,
         restricted: false, banned: false,
+        platform: 'web',
         createdAt: serverTimestamp(),
       });
-      toast.success('Vidéo publiée ! 🎮');
-      router.push('/creator');
+
+      setUploading(false);
+      toast.success('🎮 Vidéo envoyée à Mux ! Elle apparaîtra dans le feed dans quelques minutes.');
     } catch (err) {
       toast.error('Erreur upload : ' + err.message);
       setStep(2);
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   if (!mounted || !user) {
@@ -298,20 +325,34 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* STEP 3: Upload en cours */}
+      {/* STEP 3: Upload / Processing */}
       {step === 3 && (
         <div style={{ textAlign: 'center', padding: '60px 20px' }}>
           <div style={{ fontSize: 56, marginBottom: 24 }}>{uploading ? '📤' : '✅'}</div>
           <h2 style={{ fontWeight: 900, fontSize: 20, color: 'var(--white)', marginBottom: 12 }}>
-            {uploading ? 'Upload en cours...' : 'Vidéo publiée !'}
+            {uploading ? (uploadPct < 100 ? 'Upload en cours...' : 'Traitement Mux...') : 'Vidéo envoyée !'}
           </h2>
-          {uploading && (
+          {uploading && uploadPct < 100 && (
             <>
               <div style={{ width: '100%', height: 10, borderRadius: 5, background: 'var(--gray3)', overflow: 'hidden', marginBottom: 8 }}>
                 <div style={{ height: '100%', borderRadius: 5, background: 'var(--gold)', width: `${uploadPct}%`, transition: 'width 0.3s' }} />
               </div>
               <p style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)' }}>{uploadPct}%</p>
               <p style={{ fontSize: 13, color: 'var(--gray)', marginTop: 8 }}>Ne ferme pas cette page...</p>
+            </>
+          )}
+          {uploading && uploadPct >= 100 && (
+            <p style={{ fontSize: 13, color: 'var(--gray)' }}>Vidéo reçue par Mux — encodage en cours...</p>
+          )}
+          {!uploading && (
+            <>
+              <p style={{ fontSize: 14, color: 'var(--gray)', marginBottom: 24, lineHeight: 1.6 }}>
+                Ta vidéo est en cours d'encodage par Mux.<br />
+                Elle apparaîtra dans le feed dans <strong style={{ color: 'var(--gold)' }}>quelques minutes</strong>.
+              </p>
+              <button onClick={() => router.push('/creator')} className="btn-gold" style={{ padding: '12px 28px', fontWeight: 900 }}>
+                Voir mes vidéos →
+              </button>
             </>
           )}
         </div>
