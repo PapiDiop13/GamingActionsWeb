@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  --bg:        #071A0E;
+  --surface:   #0E1A12;
+  --card:      #122B1A;
+  --border:    #1A4D2E;
+  --accent:    #00C853;
+  --gold:      #C9A84C;
+  --text:      #E8F5EE;
+  --muted:     #4A7A5A;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+@layer components {
+  .card {
+    @apply rounded-xl bg-[#122B1A] border border-[#1A4D2E];
+  }
+  .btn-primary {
+    @apply bg-[#00C853] text-black font-bold rounded-lg px-4 py-2.5 text-sm hover:bg-[#00E060] transition-colors;
+  }
+  .btn-ghost {
+    @apply text-[#4A7A5A] border border-[#1A4D2E] rounded-lg px-4 py-2.5 text-sm hover:border-[#00C853] hover:text-[#00C853] transition-colors;
+  }
+  .input {
+    @apply w-full bg-[#0E1A12] border border-[#1A4D2E] rounded-lg px-4 py-2.5 text-[#E8F5EE] text-sm placeholder-[#4A7A5A] focus:outline-none focus:border-[#00C853] transition-colors;
+  }
+  .badge-gold {
+    @apply inline-flex items-center gap-1 text-xs font-bold text-[#C9A84C] bg-[#C9A84C14] border border-[#C9A84C30] rounded-full px-2.5 py-0.5;
+  }
+  .badge-green {
+    @apply inline-flex items-center gap-1 text-xs font-bold text-[#00C853] bg-[#00C85314] border border-[#00C85330] rounded-full px-2.5 py-0.5;
+  }
+}
+
+/* Glow effects */
+.glow-green {
+  box-shadow: 0 0 12px rgba(0, 200, 83, 0.3), 0 0 24px rgba(0, 200, 83, 0.1);
+}
+.glow-gold {
+  box-shadow: 0 0 12px rgba(201, 168, 76, 0.3);
+}
+.text-glow {
+  text-shadow: 0 0 10px rgba(0, 200, 83, 0.5);
+}
+
+/* Video aspect ratio */
+.aspect-video-9-16 {
+  aspect-ratio: 9 / 16;
+}
+
+/* Scrollbar hide */
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
