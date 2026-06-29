@@ -317,6 +317,7 @@ export default function ShopPage() {
           uid: user.uid,
           email: user.email,
           itemId: item.id,
+          itemType,
           itemName: item.name,
           amountCents: Math.round((item.dollarsPrice || 0) * 100),
           successUrl: `${window.location.origin}/shop?purchased=${item.id}`,
