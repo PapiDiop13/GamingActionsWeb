@@ -316,7 +316,7 @@ export default function ShopPage() {
         body: JSON.stringify({
           uid: user.uid,
           email: user.email,
-          itemId: `${itemType}:${item.id}`,
+          itemId: item.id,
           itemName: item.name,
           amountCents: Math.round((item.dollarsPrice || 0) * 100),
           successUrl: `${window.location.origin}/shop?purchased=${item.id}`,
