@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import useAuthStore from '@/lib/stores/useAuthStore';
 import toast from 'react-hot-toast';
 
@@ -38,7 +38,6 @@ const PERKS = [
 
 export default function LegendaryPage() {
   const { user, userProfile, refreshProfile } = useAuthStore();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState('yearly');
   const [loading, setLoading] = useState(false);
@@ -46,17 +45,18 @@ export default function LegendaryPage() {
 
   const isLegendary = userProfile?.plan === 'legendary' || userProfile?.isLegendary;
 
-  // Handle Stripe redirect
+  // Handle Stripe redirect — read params from window.location (browser only)
   useEffect(() => {
-    const success = searchParams.get('success');
-    const canceled = searchParams.get('canceled');
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('success');
+    const canceled = params.get('canceled');
     if (success === 'true') {
       toast.success('🎉 Bienvenue dans Legendary ! Actualisation...');
       setTimeout(() => refreshProfile?.(), 2000);
     } else if (canceled === 'true') {
       toast('Paiement annulé.', { icon: '↩️' });
     }
-  }, [searchParams]);
+  }, []);
 
   const handleCheckout = async () => {
     if (!user) { router.push('/auth?mode=register'); return; }
