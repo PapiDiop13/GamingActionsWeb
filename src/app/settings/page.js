@@ -222,7 +222,7 @@ export default function SettingsPage() {
 
       {/* Profile */}
       <Section title="Profil">
-        <Row icon="✏️" label="Modifier le profil" sublabel="Pseudo, bio, avatar, console..." onClick={() => router.push(`/profile/${user.uid}/edit`)} />
+        <Row icon="✏️" label="Modifier le profil" sublabel="Pseudo, bio, avatar, console..." onClick={() => router.push('/profile/edit')} />
         <Row icon="⚡" label="GA Points & Historique" sublabel={`${(userProfile?.gaPoints || 0).toLocaleString()} points`} onClick={() => router.push('/points')} />
         <Row icon="🛍️" label="Boutique cosmétiques" sublabel="Frames, bannières, thèmes..." onClick={() => router.push('/shop')} />
       </Section>

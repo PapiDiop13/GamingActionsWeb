@@ -353,9 +353,9 @@ function GenreLeaderboard({ genreId }) {
       const map = {};
       snap.docs.forEach(d => {
         const v = d.data();
-        if (!v.userId || !(v.ggCount > 0) || v.banned || v.restricted) return;
+        if (!v.userId || !(v.ggMonth > 0) || v.banned || v.restricted) return;
         if (!map[v.userId]) map[v.userId] = { uid: v.userId, username: v.username, avatar: v.avatar || '', ggCount: 0 };
-        map[v.userId].ggCount += v.ggCount || 0;
+        map[v.userId].ggCount += v.ggMonth || 0;
       });
       const top3 = Object.values(map).sort((a, b) => b.ggCount - a.ggCount).slice(0, 3).map((u, i) => ({ ...u, rank: i + 1 }));
       GENRE_CACHE[genreId] = { data: top3, ts: Date.now() };
@@ -403,10 +403,18 @@ export default function RankingsPage() {
   const [myRank, setMyRank] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showCountdown, setShowCountdown] = useState(false);
+  const [wall, setWall] = useState([]); // Wall of Legends — champions mensuels (hall_of_fame)
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  // Charge le Wall of Legends
+  useEffect(() => {
+    getDocs(query(collection(db, 'hall_of_fame'), orderBy('month', 'desc'), limit(12)))
+      .then(snap => setWall(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -416,16 +424,16 @@ export default function RankingsPage() {
         try {
           const allVideos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-          // Top videos
-          const topVids = [...allVideos].sort((a, b) => (b.ggCount || 0) - (a.ggCount || 0)).map((v, i) => ({ ...v, rank: i + 1 }));
-          setTopVideos(topVids.filter(v => (v.ggCount || 0) > 0).slice(0, 5));
+          // Top videos (GG DU MOIS)
+          const topVids = [...allVideos].sort((a, b) => (b.ggMonth || 0) - (a.ggMonth || 0)).map((v, i) => ({ ...v, rank: i + 1, ggCount: v.ggMonth || 0 }));
+          setTopVideos(topVids.filter(v => (v.ggMonth || 0) > 0).slice(0, 5));
 
-          // Aggregate GG by user
+          // Aggregate GG DU MOIS by user
           const userGGs = {};
           allVideos.forEach(v => {
-            if (!v.userId || !(v.ggCount > 0) || v.banned || v.restricted) return;
+            if (!v.userId || !(v.ggMonth > 0) || v.banned || v.restricted) return;
             if (!userGGs[v.userId]) userGGs[v.userId] = { uid: v.userId, username: v.username, avatar: v.avatar || '', plan: v.plan || 'free', streakLevel: v.streakLevel, ggCount: 0 };
-            userGGs[v.userId].ggCount += v.ggCount || 0;
+            userGGs[v.userId].ggCount += v.ggMonth || 0;
           });
 
           const sorted = Object.values(userGGs).sort((a, b) => b.ggCount - a.ggCount);
@@ -650,12 +658,27 @@ export default function RankingsPage() {
         {/* ── HISTORY ── */}
         {activeTab === 'history' && (
           <>
-            <p style={{ fontSize: 12, color: '#888899', padding: '6px 0 10px' }}>📅 The Hall of Champions</p>
-            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🏛️</div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Coming Soon</p>
-              <p style={{ fontSize: 13, color: '#888899', lineHeight: 1.6 }}>Monthly champions archive is being built. Rankings reset at end of each month.</p>
-            </div>
+            <p style={{ fontSize: 12, color: '#888899', padding: '6px 0 10px' }}>🏛️ Wall of Legends — monthly champions & top 3</p>
+            {wall.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🏛️</div>
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 8 }}>No legends yet</p>
+                <p style={{ fontSize: 13, color: '#888899', lineHeight: 1.6 }}>The first champions will be crowned at the end of this month. Rankings reset monthly. 👑</p>
+              </div>
+            ) : wall.map((w) => (
+              <div key={w.id} style={{ marginBottom: 14, background: '#1A1A26', borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(201,168,76,0.35)' }}>
+                <div style={{ padding: '10px 14px', background: 'rgba(201,168,76,0.1)' }}>
+                  <span style={{ color: '#C9A84C', fontWeight: 900, fontSize: 13, letterSpacing: 1 }}>{w.month}</span>
+                </div>
+                {(w.podium || []).map((p) => (
+                  <div key={p.uid} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
+                    <span style={{ width: 32, textAlign: 'center', fontWeight: 900, color: p.rank === 1 ? '#C9A84C' : '#fff', marginRight: 10 }}>{p.rank === 1 ? '👑' : `#${p.rank}`}</span>
+                    <span style={{ flex: 1, color: '#fff', fontWeight: 700 }}>{p.username}</span>
+                    <span style={{ fontWeight: 900, color: '#C9A84C' }}>{fmtGG(p.ggMonth || 0)} GG</span>
+                  </div>
+                ))}
+              </div>
+            ))}
           </>
         )}
 

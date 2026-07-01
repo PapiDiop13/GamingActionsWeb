@@ -10,11 +10,13 @@ import { db } from '@/lib/firebase';
 import useAuthStore from '@/lib/stores/useAuthStore';
 import toast from 'react-hot-toast';
 
+const CF_BASE = 'https://us-central1-gamingactions-app.cloudfunctions.net';
+
 const BENEFITS = [
-  { icon: '🎬', label: 'Exclusive Clips', desc: 'Gameplay privé réservé aux fans', color: 'var(--gold)' },
-  { icon: '💡', label: 'Private Tips', desc: 'Tutoriels avancés hors du feed', color: 'var(--blue)' },
-  { icon: '🎭', label: 'Behind the Scenes', desc: 'Setup, bloopers, gameplay brut', color: '#7C4DFF' },
-  { icon: '💬', label: 'FanBox Access', desc: 'Chat de groupe avec le créateur', color: '#00C853' },
+  { icon: '🎬', label: 'Exclusive Clips', desc: 'Private gameplay for fans only', color: 'var(--gold)' },
+  { icon: '💡', label: 'Private Tips', desc: 'Advanced tutorials not on the feed', color: 'var(--blue)' },
+  { icon: '🎭', label: 'Behind the Scenes', desc: 'Setup, bloopers, raw gameplay', color: '#7C4DFF' },
+  { icon: '💬', label: 'FanBox Access', desc: 'Group chat with the creator', color: '#00C853' },
 ];
 
 export default function FanbasePage({ params }) {
@@ -48,33 +50,46 @@ export default function FanbasePage({ params }) {
     )).then(snap => setSubscribed(!snap.empty)).catch(() => {});
   }, [user, creatorId]);
 
+  // Stripe checkout result (?success / ?canceled)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('success') === 'true') {
+      toast.success(`🔓 Welcome to ${creator?.username || 'the'} Fanbase!`);
+      setSubscribed(true);
+    }
+  }, [creator]);
+
   const handleJoin = async () => {
     if (!user) { router.push('/auth'); return; }
-    if (user.uid === creatorId) { toast.error('Tu ne peux pas rejoindre ta propre fanbase'); return; }
+    if (user.uid === creatorId) { toast.error("You can't join your own Fanbase"); return; }
     setJoining(true);
     try {
-      const subId = `${user.uid}_${creatorId}`;
-      await setDoc(doc(db, 'fanbase_subscriptions', subId), {
-        subscriberId: user.uid,
-        subscriberUsername: userProfile?.username || '',
-        subscriberAvatar: userProfile?.avatarUrl || '',
-        creatorId,
-        joinedAt: serverTimestamp(),
-        status: 'active',
+      const token = await user.getIdToken();
+      const res = await fetch(`${CF_BASE}/createFanbaseCheckoutSession`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          creatorId,
+          creatorUsername: creator?.username || '',
+          successUrl: `${window.location.origin}/fanbase/${creatorId}?success=true`,
+          cancelUrl: `${window.location.origin}/fanbase/${creatorId}`,
+        }),
       });
-      await updateDoc(doc(db, 'fanbases', creatorId), { subscriberCount: increment(1) });
-      await updateDoc(doc(db, 'users', user.uid), { fanbaseSubscriptions: increment(1) });
-      setSubscribed(true);
-      setFanbase(prev => prev ? { ...prev, subscriberCount: (prev.subscriberCount || 0) + 1 } : prev);
-      toast.success(`🔓 Tu fais partie de la Fanbase de ${creator?.username} !`);
-    } catch (e) { toast.error('Erreur lors de l\'inscription'); }
-    setJoining(false);
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+      else throw new Error(data.error || 'Error');
+    } catch (e) {
+      toast.error('Payment error: ' + e.message);
+      setJoining(false);
+    }
   };
 
   if (loading) {
     return (
       <div style={{ display: 'flex', height: '60vh', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: 'var(--gray)' }}><div style={{ fontSize: 32 }}>👥</div><p style={{ marginTop: 8 }}>Chargement...</p></div>
+        <div style={{ textAlign: 'center', color: 'var(--gray)' }}><div style={{ fontSize: 32 }}>👥</div><p style={{ marginTop: 8 }}>Loading…</p></div>
       </div>
     );
   }
@@ -84,8 +99,8 @@ export default function FanbasePage({ params }) {
       <div style={{ display: 'flex', height: '60vh', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: 'var(--gray)' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>😕</div>
-          <p style={{ fontWeight: 700, marginBottom: 8 }}>Fanbase introuvable</p>
-          <Link href="/" style={{ color: 'var(--gold)', textDecoration: 'none' }}>← Retour au feed</Link>
+          <p style={{ fontWeight: 700, marginBottom: 8 }}>Fanbase not found</p>
+          <Link href="/" style={{ color: 'var(--gold)', textDecoration: 'none' }}>← Back to feed</Link>
         </div>
       </div>
     );
@@ -147,12 +162,12 @@ export default function FanbasePage({ params }) {
       {/* Price */}
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', padding: '24px 0 20px', borderBottom: '1px solid var(--gray3)' }}>
         <span style={{ fontSize: 48, fontWeight: 900, color: '#7C4DFF' }}>CA$3.99</span>
-        <span style={{ fontSize: 16, color: 'var(--gray)', marginLeft: 4 }}>/mois</span>
+        <span style={{ fontSize: 16, color: 'var(--gray)', marginLeft: 4 }}>/month</span>
       </div>
 
       {/* Benefits */}
       <div style={{ padding: '8px 0' }}>
-        <p style={{ fontSize: 10, color: 'var(--gray)', fontWeight: 700, letterSpacing: 1.5, paddingLeft: 16, paddingTop: 12, paddingBottom: 8 }}>CE QUE TU OBTIENS</p>
+        <p style={{ fontSize: 10, color: 'var(--gray)', fontWeight: 700, letterSpacing: 1.5, paddingLeft: 16, paddingTop: 12, paddingBottom: 8 }}>WHAT YOU GET</p>
         {BENEFITS.map(b => (
           <div key={b.label} style={{
             display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
@@ -187,8 +202,8 @@ export default function FanbasePage({ params }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
               padding: '16px 0', borderRadius: 14, background: '#00C853', border: 'none',
               color: '#000', fontWeight: 900, fontSize: 16, textDecoration: 'none', marginBottom: 10,
-            }}>🔓 Voir le contenu exclusif</Link>
-            <p style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center' }}>✓ Tu es déjà abonné</p>
+            }}>🔓 View exclusive content</Link>
+            <p style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center' }}>✓ You're a member · manage your subscription in settings</p>
           </>
         ) : (
           <>
@@ -197,9 +212,9 @@ export default function FanbasePage({ params }) {
               background: '#7C4DFF', color: '#fff', fontWeight: 900, fontSize: 16,
               opacity: joining ? 0.7 : 1, marginBottom: 10,
             }}>
-              {joining ? 'Inscription...' : '🔓 Rejoindre (mode test · gratuit)'}
+              {joining ? 'Redirecting…' : '🔓 Subscribe — CA$3.99/month'}
             </button>
-            <p style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center' }}>Accès gratuit pendant la phase de lancement 🚀</p>
+            <p style={{ fontSize: 12, color: 'var(--gray)', textAlign: 'center' }}>Cancel anytime · secure payment via Stripe 🔒</p>
           </>
         )}
       </div>

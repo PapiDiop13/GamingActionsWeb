@@ -10,7 +10,7 @@ import {
 import { db } from '@/lib/firebase';
 import useAuthStore from '@/lib/stores/useAuthStore';
 import FramedAvatar from '@/components/ui/FramedAvatar';
-import { PROFILE_BANNERS, PROFILE_BACKGROUNDS, USERNAME_EFFECTS, PROFILE_BADGES } from '@/lib/cosmetics';
+import { PROFILE_BANNERS, PROFILE_BACKGROUNDS, USERNAME_EFFECTS, PROFILE_BADGES, PROFILE_THEMES } from '@/lib/cosmetics';
 
 /* ── Helpers ── */
 const fmtNum = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : `${n || 0}`;
@@ -197,6 +197,21 @@ function QRModal({ username, onClose }) {
   );
 }
 
+/* ── Theme border colors ── */
+const THEME_COLORS = {
+  theme_champion:    { c1: '#C9A84C', c2: '#FFD700' },
+  theme_phantom:     { c1: '#BF5AF2', c2: '#7C4DFF' },
+  theme_inferno:     { c1: '#FF3D00', c2: '#FF6D00' },
+  theme_storm:       { c1: '#00D4FF', c2: '#7C4DFF' },
+  theme_cosmic:      { c1: '#E040FB', c2: '#00D4FF' },
+  theme_matrix:      { c1: '#00FF41', c2: '#00C853' },
+  theme_sakura:      { c1: '#FF69B4', c2: '#FFB7C5' },
+  theme_cyber:       { c1: '#FF0080', c2: '#00D4FF' },
+  theme_arctic:      { c1: '#A0E8FF', c2: '#00D4FF' },
+  theme_void_walker: { c1: '#7C4DFF', c2: '#BC13FE' },
+  theme_neon_city:   { c1: '#FF00FF', c2: '#00FFFF' },
+};
+
 /* ── Main Page ── */
 export default function ProfilePage() {
   const { userId }  = useParams();
@@ -304,10 +319,71 @@ export default function ProfilePage() {
 
   const TABS = isCreator ? ['Clips', 'Tips', 'Infos'] : ['Clips', 'Infos'];
 
+  // Detect equipped theme (field set when applying, or fall back to bg match)
+  const equippedThemeId = p?.equippedTheme ||
+    PROFILE_THEMES?.find(t => t.includes?.[0] === (p?.equippedProfileBg || p?.equippedBackground))?.id;
+  const themeColor = THEME_COLORS[equippedThemeId];
+
   return (
     <div style={{ background: containerBg, minHeight: '100vh', paddingBottom: 80, position: 'relative', overflow: 'hidden' }}>
       {showStreak && <StreakModal level={p?.streakLevel || 'noob'} points={p?.streakPoints || 0} onClose={() => setShowStreak(false)} />}
       {showQR && <QRModal username={p?.username} onClose={() => setShowQR(false)} />}
+
+      {/* ── Theme animated page borders ── */}
+      {themeColor && (
+        <>
+          <style>{`
+            @keyframes theme-sweep-h {
+              0%   { background-position: -280px 0; }
+              100% { background-position: calc(100vw + 280px) 0; }
+            }
+            @keyframes theme-sweep-v {
+              0%   { background-position: 0 -280px; }
+              100% { background-position: 0 calc(100vh + 280px); }
+            }
+          `}</style>
+          {/* Permanent thin colored frame */}
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 2, zIndex: 120, pointerEvents: 'none', background: `linear-gradient(90deg, ${themeColor.c1}, ${themeColor.c2}, ${themeColor.c1})`, opacity: 0.5 }} />
+          <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 2, zIndex: 120, pointerEvents: 'none', background: `linear-gradient(180deg, ${themeColor.c1}, ${themeColor.c2}, ${themeColor.c1})`, opacity: 0.5 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 2, zIndex: 120, pointerEvents: 'none', background: `linear-gradient(90deg, ${themeColor.c1}, ${themeColor.c2}, ${themeColor.c1})`, opacity: 0.5 }} />
+          <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 2, zIndex: 120, pointerEvents: 'none', background: `linear-gradient(180deg, ${themeColor.c1}, ${themeColor.c2}, ${themeColor.c1})`, opacity: 0.5 }} />
+          {/* Traveling shimmer — TOP */}
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, height: 4, zIndex: 121, pointerEvents: 'none',
+            background: `linear-gradient(90deg, transparent 0%, ${themeColor.c1}80 35%, ${themeColor.c2} 50%, ${themeColor.c1}80 65%, transparent 100%)`,
+            backgroundSize: '280px 100%', backgroundRepeat: 'no-repeat',
+            animation: 'theme-sweep-h 2.4s linear infinite',
+            boxShadow: `0 0 16px ${themeColor.c1}, 0 0 32px ${themeColor.c2}60`,
+          }} />
+          {/* Traveling shimmer — RIGHT */}
+          <div style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0, width: 4, zIndex: 121, pointerEvents: 'none',
+            background: `linear-gradient(180deg, transparent 0%, ${themeColor.c1}80 35%, ${themeColor.c2} 50%, ${themeColor.c1}80 65%, transparent 100%)`,
+            backgroundSize: '100% 280px', backgroundRepeat: 'no-repeat',
+            animation: 'theme-sweep-v 2.4s linear infinite',
+            animationDelay: '0.6s',
+            boxShadow: `0 0 16px ${themeColor.c1}, 0 0 32px ${themeColor.c2}60`,
+          }} />
+          {/* Traveling shimmer — BOTTOM */}
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, height: 4, zIndex: 121, pointerEvents: 'none',
+            background: `linear-gradient(270deg, transparent 0%, ${themeColor.c1}80 35%, ${themeColor.c2} 50%, ${themeColor.c1}80 65%, transparent 100%)`,
+            backgroundSize: '280px 100%', backgroundRepeat: 'no-repeat',
+            animation: 'theme-sweep-h 2.4s linear infinite',
+            animationDelay: '1.2s',
+            boxShadow: `0 0 16px ${themeColor.c1}, 0 0 32px ${themeColor.c2}60`,
+          }} />
+          {/* Traveling shimmer — LEFT */}
+          <div style={{
+            position: 'fixed', top: 0, left: 0, bottom: 0, width: 4, zIndex: 121, pointerEvents: 'none',
+            background: `linear-gradient(360deg, transparent 0%, ${themeColor.c1}80 35%, ${themeColor.c2} 50%, ${themeColor.c1}80 65%, transparent 100%)`,
+            backgroundSize: '100% 280px', backgroundRepeat: 'no-repeat',
+            animation: 'theme-sweep-v 2.4s linear infinite',
+            animationDelay: '1.8s',
+            boxShadow: `0 0 16px ${themeColor.c1}, 0 0 32px ${themeColor.c2}60`,
+          }} />
+        </>
+      )}
 
       {/* Accent blobs */}
       {accentBg && (
@@ -329,6 +405,14 @@ export default function ProfilePage() {
         {/* Champion shimmer */}
         {isChampion && (
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, rgba(201,168,76,0.15), transparent)', animation: 'shimmer 2s ease-in-out infinite' }} />
+        )}
+        {/* Theme shimmer overlay on banner */}
+        {themeColor && (
+          <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, transparent, ${themeColor.c1}22, ${themeColor.c2}30, ${themeColor.c1}22, transparent)`, backgroundSize: '300% 100%', animation: 'shimmer 2.5s ease-in-out infinite', pointerEvents: 'none' }} />
+        )}
+        {/* Theme bottom glow line on banner */}
+        {themeColor && (
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${themeColor.c1}, ${themeColor.c2}, ${themeColor.c1}, transparent)`, backgroundSize: '280px 100%', backgroundRepeat: 'no-repeat', animation: 'theme-sweep-h 2s linear infinite', boxShadow: `0 0 20px ${themeColor.c1}, 0 0 40px ${themeColor.c2}60`, pointerEvents: 'none' }} />
         )}
         {/* Header actions overlay */}
         <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 8 }}>
@@ -362,7 +446,7 @@ export default function ProfilePage() {
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 48 }}>
             {isOwn ? (
-              <Link href={`/profile/${userId}/edit`} style={{
+              <Link href={`/profile/edit`} style={{
                 padding: '9px 18px', borderRadius: 22, border: '1px solid rgba(255,255,255,0.2)',
                 background: 'rgba(255,255,255,0.06)', color: '#fff', fontWeight: 700, fontSize: 13,
                 textDecoration: 'none', display: 'inline-block',
@@ -628,6 +712,18 @@ export default function ProfilePage() {
               </div>
               <span style={{ color: '#888899', fontSize: 16 }}>›</span>
             </button>
+
+            {/* Support the App */}
+            {isOwn && (
+              <Link href="/support" style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(201,168,76,0.08)', border: '0.5px solid rgba(201,168,76,0.5)', borderRadius: 14, padding: 14, marginTop: 12, textDecoration: 'none' }}>
+                <span style={{ fontSize: 22 }}>💛</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: '#fff' }}>Support the App</span>
+                  <span style={{ display: 'block', fontSize: 11, color: '#888899', marginTop: 2 }}>Help Gaming Actions keep growing</span>
+                </span>
+                <span style={{ color: '#888899', fontSize: 16 }}>›</span>
+              </Link>
+            )}
           </div>
         )}
       </div>

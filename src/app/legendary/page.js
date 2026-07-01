@@ -11,7 +11,7 @@ const PLANS = [
   {
     id: 'monthly',
     label: 'Mensuel',
-    price: 'CA$1.99',
+    price: 'CA$2.99',
     sub: '/mois',
     badge: null,
     highlight: false,
@@ -19,9 +19,9 @@ const PLANS = [
   {
     id: 'yearly',
     label: 'Annuel',
-    price: 'CA$14.99',
+    price: 'CA$19.99',
     sub: '/an',
-    badge: '🔥 -37%',
+    badge: '🔥 -44%',
     highlight: true,
   },
 ];
@@ -62,9 +62,10 @@ export default function LegendaryPage() {
     if (!user) { router.push('/auth?mode=register'); return; }
     setLoading(true);
     try {
+      const token = await user.getIdToken();
       const res = await fetch(`${CF_BASE}/createCheckoutSession`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           uid: user.uid,
           email: user.email,
@@ -77,10 +78,10 @@ export default function LegendaryPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        throw new Error(data.error || 'Erreur');
+        throw new Error(data.error || 'Error');
       }
     } catch (e) {
-      toast.error('Erreur de paiement : ' + e.message);
+      toast.error('Payment error: ' + e.message);
       setLoading(false);
     }
   };
@@ -89,9 +90,10 @@ export default function LegendaryPage() {
     if (!user) return;
     setPortalLoading(true);
     try {
+      const token = await user.getIdToken();
       const res = await fetch(`${CF_BASE}/createPortalSession`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           uid: user.uid,
           returnUrl: `${window.location.origin}/legendary`,
@@ -99,9 +101,9 @@ export default function LegendaryPage() {
       });
       const data = await res.json();
       if (data.url) window.location.href = data.url;
-      else throw new Error(data.error || 'Erreur');
+      else throw new Error(data.error || 'Error');
     } catch (e) {
-      toast.error('Erreur : ' + e.message);
+      toast.error('Error: ' + e.message);
       setPortalLoading(false);
     }
   };

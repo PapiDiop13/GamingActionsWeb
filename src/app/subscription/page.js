@@ -76,7 +76,7 @@ export default function SubscriptionPage() {
         }}>
           <div className="text-5xl mb-4">👑</div>
           <div className="mb-2">
-            <span className="text-5xl font-black" style={{ color: 'var(--white)' }}>CA$1.99</span>
+            <span className="text-5xl font-black" style={{ color: 'var(--white)' }}>CA$2.99</span>
             <span className="text-lg" style={{ color: 'var(--gray)' }}>/mois</span>
           </div>
           <p className="text-sm mb-8" style={{ color: 'var(--gray)' }}>Annule quand tu veux · Aucun engagement</p>
@@ -95,7 +95,7 @@ export default function SubscriptionPage() {
               className="btn-gold w-full flex items-center justify-center gap-2 text-base py-3"
               style={{ display: 'flex' }}
             >
-              👑 Devenir Legendary — CA$1.99/mois
+              👑 Devenir Legendary — CA$2.99/mois
             </Link>
           ) : (
             <div className="space-y-3 flex flex-col gap-3">

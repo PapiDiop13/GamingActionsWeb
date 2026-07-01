@@ -13,7 +13,6 @@ import FramedAvatar from '@/components/ui/FramedAvatar';
 import { PROFILE_BADGES, CARD_BORDERS, USERNAME_EFFECTS } from '@/lib/cosmetics';
 import { COMMENT_FRAMES } from '@/lib/frames';
 import { formatDistanceToNow } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 
 // ─── Cosmetic helpers ─────────────────────────────────────────────────────────
@@ -98,7 +97,7 @@ function getThumbnailUrl(v) {
 
 function timeAgo(ts) {
   if (!ts) return '';
-  try { return formatDistanceToNow(ts.toDate ? ts.toDate() : new Date(ts), { addSuffix: true, locale: fr }); }
+  try { return formatDistanceToNow(ts.toDate ? ts.toDate() : new Date(ts), { addSuffix: true }); }
   catch { return ''; }
 }
 
@@ -241,22 +240,22 @@ export default function VideoPage() {
       const newRef = await addDoc(collection(db, 'comments', videoId, 'messages'), payload);
       setComments(prev => [{ id: newRef.id, ...payload, createdAt: null }, ...prev]);
       setComment('');
-      toast.success('Commentaire ajouté !');
+      toast.success('Comment added!');
     } catch (err) {
       console.error(err);
-      toast.error('Erreur lors de l\'envoi');
+      toast.error('Failed to post comment');
     }
     setSending(false);
   };
 
   const REPORT_REASONS = [
-    'Contenu inapproprié ou explicite',
-    'Harcèlement ou discours haineux',
-    'Spam ou contenu trompeur',
-    'Violence ou contenu dangereux',
-    'Violation de droits d\'auteur / IP',
-    'Gameplay faux ou modifié pour tricher',
-    'Autre',
+    'Inappropriate or explicit content',
+    'Harassment or hate speech',
+    'Spam or misleading content',
+    'Violence or dangerous content',
+    'Copyright / IP infringement',
+    'Fake or modified gameplay (cheating)',
+    'Other',
   ];
 
   const handleReport = async () => {
@@ -278,7 +277,7 @@ export default function VideoPage() {
       try { await updateDoc(doc(db, 'videos', videoId), { reportCount: increment(1) }); } catch {}
       setReportSent(true);
       setTimeout(() => { setReportModal(false); setReportSent(false); setReportReason(null); setReportDetails(''); }, 2000);
-    } catch (e) { toast.error('Erreur lors du signalement'); }
+    } catch (e) { toast.error('Failed to submit report'); }
     setReportLoading(false);
   };
 
@@ -308,7 +307,7 @@ export default function VideoPage() {
         onMouseEnter={e => { e.currentTarget.style.color = 'var(--white)'; e.currentTarget.style.borderColor = 'var(--gray)'; }}
         onMouseLeave={e => { e.currentTarget.style.color = 'var(--gray)'; e.currentTarget.style.borderColor = 'var(--gray3)'; }}
       >
-        ← Retour
+        ← Back
       </button>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -340,7 +339,7 @@ export default function VideoPage() {
             {/* Info below video */}
             <div style={{ marginTop: 16 }}>
               <h1 style={{ fontWeight: 900, fontSize: 20, color: 'var(--white)', marginBottom: 12 }}>
-                {video.title || 'Sans titre'}
+                {video.title || 'Untitled'}
               </h1>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -378,6 +377,32 @@ export default function VideoPage() {
                     <span>{ggCount} GG{ggCount !== 1 ? 's' : ''}</span>
                   </button>
 
+                  {/* Share button — matches mobile player actions */}
+                  <button
+                    onClick={() => {
+                      const url = `https://gamingactions.app/clip/${videoId}`;
+                      if (navigator.share) {
+                        navigator.share({ title: video?.title || 'Gaming Actions', url }).catch(() => {});
+                      } else {
+                        navigator.clipboard?.writeText(url).then(() => toast.success('Link copied!')).catch(() => {});
+                      }
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '8px 14px', borderRadius: 20,
+                      fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      background: 'transparent',
+                      color: 'var(--gray)',
+                      border: '1.5px solid var(--gray3)',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--gray)'; e.currentTarget.style.borderColor = 'var(--gray3)'; }}
+                  >
+                    <span>↗</span>
+                    <span>Share</span>
+                  </button>
+
                   {/* Report button */}
                   {user && video?.userId !== user?.uid && (
                     <button
@@ -395,7 +420,7 @@ export default function VideoPage() {
                       onMouseLeave={e => { e.currentTarget.style.color = 'var(--gray)'; e.currentTarget.style.borderColor = 'var(--gray3)'; }}
                     >
                       <span>🚩</span>
-                      <span>Signaler</span>
+                      <span>Report</span>
                     </button>
                   )}
                 </div>
@@ -417,14 +442,14 @@ export default function VideoPage() {
 
           {/* Comments panel */}
           <div style={{ flex: '0 0 320px', minWidth: 0 }}>
-            <h2 style={{ fontWeight: 900, fontSize: 16, color: 'var(--white)', marginBottom: 14 }}>💬 Commentaires</h2>
+            <h2 style={{ fontWeight: 900, fontSize: 16, color: 'var(--white)', marginBottom: 14 }}>💬 Comments</h2>
 
             {/* Input */}
             <form onSubmit={handleComment} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
               <textarea
                 className="input resize-none"
                 style={{ height: 80, fontSize: 13 }}
-                placeholder={user ? 'Ton commentaire...' : 'Connecte-toi pour commenter'}
+                placeholder={user ? 'Your comment...' : 'Log in to comment'}
                 value={comment}
                 onChange={e => setComment(e.target.value)}
                 disabled={!user}
@@ -435,7 +460,7 @@ export default function VideoPage() {
                 className="btn-gold"
                 style={{ width: '100%' }}
               >
-                {sending ? 'Envoi...' : user ? 'Commenter' : 'Connexion requise'}
+                {sending ? 'Sending...' : user ? 'Comment' : 'Login required'}
               </button>
             </form>
 
@@ -443,7 +468,7 @@ export default function VideoPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '55vh', overflowY: 'auto' }} className="scrollbar-hide">
               {comments.length === 0 ? (
                 <p style={{ fontSize: 13, color: 'var(--gray)', textAlign: 'center', padding: '24px 0' }}>
-                  Aucun commentaire — sois le premier !
+                  No comments yet — be the first!
                 </p>
               ) : comments.map(c => <CommentItem key={c.id} c={c} />)}
             </div>
@@ -458,16 +483,16 @@ export default function VideoPage() {
             {reportSent ? (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-                <p style={{ fontWeight: 800, color: 'var(--white)', fontSize: 16 }}>Signalement envoyé</p>
-                <p style={{ color: 'var(--gray)', fontSize: 13, marginTop: 6 }}>Merci, notre équipe va examiner ce clip.</p>
+                <p style={{ fontWeight: 800, color: 'var(--white)', fontSize: 16 }}>Report submitted</p>
+                <p style={{ color: 'var(--gray)', fontSize: 13, marginTop: 6 }}>Thanks — our team will review this clip.</p>
               </div>
             ) : (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <h3 style={{ fontWeight: 900, fontSize: 18, color: 'var(--white)', margin: 0 }}>🚩 Signaler ce clip</h3>
+                  <h3 style={{ fontWeight: 900, fontSize: 18, color: 'var(--white)', margin: 0 }}>🚩 Report this clip</h3>
                   <button onClick={() => setReportModal(false)} style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 22, cursor: 'pointer' }}>✕</button>
                 </div>
-                <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16 }}>Pourquoi signales-tu ce clip ?</p>
+                <p style={{ fontSize: 13, color: 'var(--gray)', marginBottom: 16 }}>Why are you reporting this clip?</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                   {REPORT_REASONS.map(reason => (
                     <button
@@ -486,17 +511,17 @@ export default function VideoPage() {
                 <textarea
                   value={reportDetails}
                   onChange={e => setReportDetails(e.target.value)}
-                  placeholder="Détails supplémentaires (optionnel)"
+                  placeholder="Additional details (optional)"
                   rows={3}
                   style={{ width: '100%', borderRadius: 12, padding: '10px 14px', background: 'var(--dark)', border: '1px solid var(--gray3)', color: 'var(--white)', fontSize: 13, resize: 'none', outline: 'none', marginBottom: 16, boxSizing: 'border-box' }}
                 />
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={() => setReportModal(false)} style={{ flex: 1, padding: '12px 0', borderRadius: 12, background: 'none', border: '1px solid var(--gray3)', color: 'var(--gray)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Annuler</button>
+                  <button onClick={() => setReportModal(false)} style={{ flex: 1, padding: '12px 0', borderRadius: 12, background: 'none', border: '1px solid var(--gray3)', color: 'var(--gray)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
                   <button
                     onClick={handleReport}
                     disabled={!reportReason || reportLoading}
                     style={{ flex: 1, padding: '12px 0', borderRadius: 12, background: 'var(--gold)', color: 'var(--black)', fontWeight: 900, fontSize: 13, cursor: reportReason ? 'pointer' : 'not-allowed', opacity: reportReason ? 1 : 0.5, border: 'none' }}
-                  >{reportLoading ? '...' : 'Envoyer'}</button>
+                  >{reportLoading ? '...' : 'Submit'}</button>
                 </div>
               </>
             )}

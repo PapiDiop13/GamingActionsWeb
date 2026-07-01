@@ -2,18 +2,22 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { fr } from 'date-fns/locale';
 
 function getThumbnail(video) {
-  if (video?.muxPlaybackId)
-    return `https://image.mux.com/${video.muxPlaybackId}/thumbnail.jpg?time=3&width=420&height=748&fit_mode=crop`;
-  return video?.thumbnailUrl || video?.thumbnail || null;
+  // 1) Image de couverture custom (prioritaire)
+  if (video?.thumbnail) return video.thumbnail;
+  // 2) Frame choisie dans la vidéo (thumbnailTime) via Mux
+  if (video?.muxPlaybackId) {
+    const t = typeof video.thumbnailTime === 'number' ? video.thumbnailTime : 3;
+    return `https://image.mux.com/${video.muxPlaybackId}/thumbnail.jpg?time=${t}&width=420&height=748&fit_mode=crop`;
+  }
+  return video?.thumbnailUrl || null;
 }
 
 export default function VideoCard({ video }) {
   const [hovered, setHovered] = useState(false);
   const thumb = getThumbnail(video);
-  const ago   = formatDistanceToNow(video.createdAt?.toDate?.() ?? new Date(), { addSuffix: true, locale: fr });
+  const ago   = formatDistanceToNow(video.createdAt?.toDate?.() ?? new Date(), { addSuffix: true });
   const av    = video.userAvatar;
 
   return (
@@ -62,22 +66,24 @@ export default function VideoCard({ video }) {
           </div>
         </div>
 
-        {/* GG badge */}
+        {/* GG badge — matches mobile feed (⚡ + gold count) */}
         <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full px-2 py-1" style={{
           background: 'rgba(0,0,0,0.7)',
           backdropFilter: 'blur(4px)',
+          border: '1px solid rgba(201,168,76,0.35)',
         }}>
           <span style={{ fontSize: 10 }}>⚡</span>
           <span className="text-xs font-bold" style={{ color: 'var(--gold)' }}>{video.ggCount || 0}</span>
         </div>
 
-        {/* Game badge */}
+        {/* Game badge — matches mobile feed (controller icon + gold game label) */}
         {(video.game || video.genre) && (
-          <div className="absolute top-2 left-2 rounded-full px-2 py-0.5" style={{
+          <div className="absolute top-2 left-2 flex items-center gap-1 rounded-full px-2 py-0.5" style={{
             background: 'rgba(0,0,0,0.7)',
             backdropFilter: 'blur(4px)',
           }}>
-            <span className="text-[10px] font-bold" style={{ color: 'var(--white)' }}>
+            <span style={{ fontSize: 9 }}>🎮</span>
+            <span className="text-[10px] font-bold" style={{ color: 'var(--gold)' }}>
               {video.game || video.genre}
             </span>
           </div>
@@ -90,7 +96,7 @@ export default function VideoCard({ video }) {
           className="text-sm font-bold line-clamp-2 mb-2 transition-colors"
           style={{ color: hovered ? 'var(--gold)' : 'var(--white)' }}
         >
-          {video.title || 'Sans titre'}
+          {video.title || 'Untitled'}
         </h3>
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 rounded-full overflow-hidden shrink-0" style={{ background: 'var(--card2)', border: '1px solid var(--gray3)' }}>

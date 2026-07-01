@@ -15,6 +15,7 @@ const AUTH_NAV_BASE = [
   { href: '/points',        icon: '⚡', label: 'GA Points' },
   { href: '/tips',          icon: '💡', label: 'GameTips' },
   { href: '/giftcards',     icon: '🎁', label: 'Gift Cards' },
+  { href: '/support',       icon: '💛', label: 'Support the App' },
   { href: '/settings',      icon: '⚙️', label: 'Settings' },
 ];
 

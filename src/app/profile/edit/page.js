@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
@@ -96,8 +97,8 @@ export default function EditProfilePage() {
   };
 
   const handleSave = async () => {
-    if (!username.trim()) return toast.error('Le pseudo est obligatoire');
-    if (username.trim().length < 3) return toast.error('Pseudo trop court (3 chars min)');
+    if (!username.trim()) return toast.error('Username is required');
+    if (username.trim().length < 3) return toast.error('Username too short (3 chars min)');
 
     setLoading(true);
     try {
@@ -108,7 +109,7 @@ export default function EditProfilePage() {
           where('usernameLower', '==', username.trim().toLowerCase())
         ));
         if (!existing.empty && existing.docs[0].id !== user.uid) {
-          toast.error('Ce pseudo est déjà pris');
+          toast.error('This username is already taken');
           setLoading(false);
           return;
         }
@@ -134,10 +135,10 @@ export default function EditProfilePage() {
       });
 
       await refreshProfile?.();
-      toast.success('Profil mis à jour ✅');
+      toast.success('Profile updated ✅');
       router.push(`/profile/${user.uid}`);
     } catch (e) {
-      toast.error('Erreur : ' + e.message);
+      toast.error('Error: ' + e.message);
     }
     setLoading(false);
   };
@@ -156,7 +157,7 @@ export default function EditProfilePage() {
         }}>
           ‹
         </button>
-        <h1 className="text-xl font-black" style={{ color: 'var(--white)' }}>Modifier le profil</h1>
+        <h1 className="text-xl font-black" style={{ color: 'var(--white)' }}>Edit Profile</h1>
       </div>
 
       {/* Avatar */}
@@ -190,7 +191,7 @@ export default function EditProfilePage() {
           </div>
         </div>
         <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-        <p className="text-xs mt-3" style={{ color: 'var(--gray)' }}>Clique pour changer l'avatar</p>
+        <p className="text-xs mt-3" style={{ color: 'var(--gray)' }}>Tap to change your avatar</p>
       </div>
 
       {/* Form */}
@@ -198,12 +199,12 @@ export default function EditProfilePage() {
 
         {/* Username */}
         <div>
-          <label className="block text-xs font-bold mb-2 uppercase tracking-widest" style={{ color: 'var(--gray)' }}>Pseudo *</label>
+          <label className="block text-xs font-bold mb-2 uppercase tracking-widest" style={{ color: 'var(--gray)' }}>Username *</label>
           <input
             className="input"
             value={username}
             onChange={e => setUsername(e.target.value)}
-            placeholder="ton_pseudo"
+            placeholder="your_username"
             maxLength={30}
           />
         </div>
@@ -216,7 +217,7 @@ export default function EditProfilePage() {
             style={{ height: 80 }}
             value={bio}
             onChange={e => setBio(e.target.value)}
-            placeholder="Présente-toi en quelques mots..."
+            placeholder="Tell us a bit about yourself..."
             maxLength={160}
           />
           <p className="text-[10px] text-right mt-1" style={{ color: 'var(--gray)' }}>{bio.length}/160</p>
@@ -224,7 +225,7 @@ export default function EditProfilePage() {
 
         {/* Console */}
         <div>
-          <label className="block text-xs font-bold mb-2 uppercase tracking-widest" style={{ color: 'var(--gray)' }}>Console principale</label>
+          <label className="block text-xs font-bold mb-2 uppercase tracking-widest" style={{ color: 'var(--gray)' }}>Main console</label>
           <div className="flex flex-wrap gap-2">
             {CONSOLES.map(c => (
               <button
@@ -246,7 +247,7 @@ export default function EditProfilePage() {
 
         {/* Main game */}
         <div>
-          <label className="block text-xs font-bold mb-2 uppercase tracking-widest" style={{ color: 'var(--gray)' }}>Jeu principal</label>
+          <label className="block text-xs font-bold mb-2 uppercase tracking-widest" style={{ color: 'var(--gray)' }}>Main game</label>
           <div className="relative">
             <input
               className="input"
@@ -276,7 +277,7 @@ export default function EditProfilePage() {
 
         {/* Social links */}
         <div>
-          <label className="block text-xs font-bold mb-3 uppercase tracking-widest" style={{ color: 'var(--gray)' }}>Liens sociaux</label>
+          <label className="block text-xs font-bold mb-3 uppercase tracking-widest" style={{ color: 'var(--gray)' }}>Social links</label>
           <div className="flex flex-col gap-3">
             {SOCIAL_LINKS.map(s => (
               <div key={s.id} className="flex items-center gap-3">
@@ -296,6 +297,20 @@ export default function EditProfilePage() {
           </div>
         </div>
 
+        {/* Support us */}
+        <Link href="/support" style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12,
+          background: 'rgba(201,168,76,0.08)', border: '0.5px solid rgba(201,168,76,0.5)',
+          textDecoration: 'none', marginTop: 4,
+        }}>
+          <span style={{ fontSize: 22 }}>💛</span>
+          <span style={{ flex: 1 }}>
+            <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: 'var(--white)' }}>Support us</span>
+            <span style={{ display: 'block', fontSize: 11, color: 'var(--gray)', marginTop: 2 }}>Help Gaming Actions keep growing</span>
+          </span>
+          <span style={{ fontSize: 18, color: 'var(--gray)' }}>›</span>
+        </Link>
+
         {/* Save */}
         <button
           onClick={handleSave}
@@ -303,7 +318,7 @@ export default function EditProfilePage() {
           className="btn-gold w-full py-3 text-base font-black mt-2"
           style={{ opacity: loading ? 0.7 : 1 }}
         >
-          {loading ? 'Sauvegarde...' : '✅ Sauvegarder le profil'}
+          {loading ? 'Saving...' : '✅ Save profile'}
         </button>
       </div>
     </div>

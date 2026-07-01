@@ -3,34 +3,49 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/lib/firebase';
 import useAuthStore from '@/lib/stores/useAuthStore';
+import { VIDEO_FRAMES } from '@/lib/frames';
+import { GAMES } from '@/lib/games';
 import toast from 'react-hot-toast';
 
 const CF_BASE = 'https://us-central1-gamingactions-app.cloudfunctions.net';
 
-const GENRES = ['FPS', 'Sports', 'RPG', 'MOBA', 'Battle Royale', 'Racing', 'Fighting', 'Strategy', 'Action', 'Other'];
-const CONSOLES = ['PS5', 'PS4', 'Xbox Series X', 'Xbox Series S', 'Xbox One', 'Nintendo Switch', 'PC', 'Mobile'];
-const GAMES_BY_GENRE = {
-  'FPS':          ['Call of Duty', 'Valorant', 'CS2', 'Overwatch 2', 'Rainbow Six Siege', 'Apex Legends', 'Warzone', 'Halo Infinite'],
-  'Sports':       ['FIFA', 'EA FC 26', 'NBA 2K', 'PES', 'NHL', 'Madden', 'eFootball'],
-  'RPG':          ['Elden Ring', 'God of War', 'Zelda', 'Pokémon', 'Final Fantasy XVI', 'Baldurs Gate 3', 'Starfield'],
-  'MOBA':         ['League of Legends', 'Dota 2', 'Smite', 'Heroes of the Storm'],
-  'Battle Royale':['Fortnite', 'Apex Legends', 'PUBG', 'Warzone', 'Fall Guys'],
-  'Racing':       ['Rocket League', 'Gran Turismo 7', 'Forza Horizon 5', 'F1 24', 'Mario Kart'],
-  'Fighting':     ['Street Fighter 6', 'Mortal Kombat 1', 'Tekken 8', 'Dragon Ball FighterZ'],
-  'Strategy':     ['StarCraft II', 'Age of Empires IV', 'Clash Royale', 'Civilization VII'],
-  'Action':       ['GTA V', 'Minecraft', 'Spider-Man 2', 'Hogwarts Legacy', 'Cyberpunk 2077'],
-  'Other':        ['Autres'],
-};
+// ─── Genres + games (aligné avec le mobile : GENRES_WITH_GAMES) ───
+const GENRES_WITH_GAMES = [
+  { id: 'all',          label: 'All Games',          icon: '🎮', games: GAMES.map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'fps',          label: 'FPS',                icon: '🎯', games: GAMES.filter(g => g.genre === 'fps').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'sports',       label: 'Sports',             icon: '⚽', games: GAMES.filter(g => g.genre === 'sports').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'battle_royale',label: 'Battle Royale',      icon: '🏆', games: GAMES.filter(g => g.genre === 'battle_royale').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'action',       label: 'Action / Adventure', icon: '💥', games: GAMES.filter(g => g.genre === 'action').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'rpg',          label: 'RPG',                icon: '⚔️', games: GAMES.filter(g => g.genre === 'rpg').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'fighting',     label: 'Fighting',           icon: '🥊', games: GAMES.filter(g => g.genre === 'fighting').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'moba',         label: 'MOBA / Strategy',    icon: '🧙', games: GAMES.filter(g => g.genre === 'moba').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'racing',       label: 'Racing',             icon: '🏎️', games: GAMES.filter(g => g.genre === 'racing').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'horror',       label: 'Horror',             icon: '👻', games: GAMES.filter(g => g.genre === 'horror').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'simulation',   label: 'Simulation / Sandbox', icon: '🏗️', games: GAMES.filter(g => g.genre === 'simulation').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+  { id: 'other',        label: 'Other',              icon: '🕹️', games: GAMES.filter(g => g.genre === 'other').map(g => g.name).sort((a, b) => a.localeCompare(b)) },
+];
+
+// Consoles (aligné avec le mobile)
+const CONSOLES = [
+  { id: 'ps5', label: 'PS5' },
+  { id: 'ps4', label: 'PS4' },
+  { id: 'xbox', label: 'Xbox' },
+  { id: 'pc', label: 'PC' },
+  { id: 'switch', label: 'Switch' },
+  { id: 'mobile', label: 'Mobile' },
+];
+
 const CONTENT_TYPES_ALL = [
-  { id: '', label: 'Clip Gaming', icon: '🎮', desc: 'Ton meilleur moment de jeu', color: 'var(--gold)' },
-  { id: 'flashtuto', label: 'Flash Tuto', icon: '💡', desc: 'Astuce ou tutoriel rapide', color: 'var(--blue)' },
-  { id: 'flashinfo', label: 'Flash Info', icon: '📰', desc: 'Actu gaming ou meta', color: 'var(--red)' },
-  { id: 'gameindev', label: 'Game In Dev', icon: '⚙️', desc: 'Journal de dev ou révélation', color: '#7C4DFF' },
+  { id: 'clip',      label: 'Gaming Clip', icon: '🎮', desc: "Share your best gameplay moments. Get GG'd by the community.", color: 'var(--gold)' },
+  { id: 'flashtuto', label: 'FlashTuto',   icon: '💡', desc: 'Short tutorial or tip to help other gamers improve.', color: 'var(--blue)' },
+  { id: 'flashinfo', label: 'FlashInfo',   icon: '📰', desc: 'Gaming news, meta updates, patch notes breakdown.', color: 'var(--red)' },
+  { id: 'gameindev', label: 'GameInDev',   icon: '⚙️', desc: 'Dev diary or reveal for a game you are building.', color: '#7C4DFF' },
 ];
 const CONTENT_TYPES_GAMER = [
-  { id: '', label: 'Clip Gaming', icon: '🎮', desc: 'Ton meilleur moment de jeu', color: 'var(--gold)' },
+  { id: 'clip', label: 'Gaming Clip', icon: '🎮', desc: "Share your best gameplay moments. Get GG'd by the community.", color: 'var(--gold)' },
 ];
 
 const STEPS = ['Type', 'Vidéo', 'Infos', 'Publier'];
@@ -41,20 +56,56 @@ export default function UploadPage() {
   const [mounted, setMounted] = useState(false);
   const isCreatorType = userProfile?.accountType === 'creator' || userProfile?.accountType === 'gameconic';
   const CONTENT_TYPES = isCreatorType ? CONTENT_TYPES_ALL : CONTENT_TYPES_GAMER;
-  // Gamers skip the type step (only Clip Gaming available)
+  // Gamers skip the type step (only Gaming Clip available)
   const [step, setStep] = useState(isCreatorType ? 0 : 1);
-  const [contentType, setContentType] = useState('');
+  const [contentType, setContentType] = useState('clip');
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [hasFanbase, setHasFanbase] = useState(false);
+  const [gameSearch, setGameSearch] = useState('');
+  const [customGame, setCustomGame] = useState('');
+  const [showCustomGame, setShowCustomGame] = useState(false);
   const [form, setForm] = useState({
-    title: '', description: '', genre: 'FPS', game: '', console: '',
+    title: '', description: '', genre: 'all', game: '', console: '',
     isFanbaseExclusive: false,
   });
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
+  const [videoFrame, setVideoFrame] = useState('none');
   const fileRef = useRef(null);
+
+  const userPlan = userProfile?.plan || 'free';
+  const availableVideoFrames = VIDEO_FRAMES.filter(f => !f.exclusive && (
+    f.free ||
+    (userProfile?.ownedVideoFrames || []).includes(f.id) ||
+    (userPlan === 'legendary' && f.category !== 'theme' && (Number(f.dollarsPrice || 0) > 0 ? Number(f.dollarsPrice) <= 1.49 : Number(f.pointsPrice || 0) > 0))
+  ));
+  // Droits + cover
+  const [agreedRights, setAgreedRights] = useState(false);
+  const [showRightsModal, setShowRightsModal] = useState(false);
+  const [thumbTime, setThumbTime] = useState(0);
+  const [vidDuration, setVidDuration] = useState(0);
+  const [customThumbUrl, setCustomThumbUrl] = useState(null);
+  const [thumbUploading, setThumbUploading] = useState(false);
+  const videoRef = useRef(null);
+  const coverFileRef = useRef(null);
+
+  const handleSeek = (t) => {
+    setThumbTime(t);
+    if (videoRef.current) { try { videoRef.current.currentTime = t; } catch (e) {} }
+  };
+  const handlePickCover = async (f) => {
+    if (!f || !user) return;
+    setThumbUploading(true);
+    try {
+      const r = storageRef(storage, `covers/${user.uid}_${Date.now()}`);
+      await uploadBytes(r, f);
+      const url = await getDownloadURL(r);
+      setCustomThumbUrl(url);
+    } catch (e) { toast.error('Cover upload failed'); }
+    setThumbUploading(false);
+  };
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
@@ -81,8 +132,12 @@ export default function UploadPage() {
   };
 
   const handlePublish = async () => {
+    const game = showCustomGame ? customGame.trim() : form.game;
     if (!file || !user) return;
     if (!form.title.trim()) { toast.error('Titre requis'); return; }
+    if (!game) { toast.error('Please select or enter a game.'); return; }
+    if (!form.console) { toast.error('Please select your console.'); return; }
+    if (!agreedRights) { toast.error('Please confirm the content-rights checkbox first.'); return; }
     setStep(3); setUploading(true); setUploadPct(0);
     try {
       // ── 1. Obtenir l'URL d'upload Mux ──────────────────────────────────
@@ -118,12 +173,17 @@ export default function UploadPage() {
         title: form.title.trim(),
         description: form.description.trim(),
         genre: form.genre,
-        game: form.game,
+        game,
         console: form.console,
         visibility: 'public',
         contentType,
         isFanbaseExclusive: form.isFanbaseExclusive,
+        videoFrame,
+        isLegendaryFrame: videoFrame !== 'none',
+        hashtags: [...new Set(((form.title + ' ' + form.description).toLowerCase().match(/#(\w+)/g) || []).map(h => h.slice(1)))],
         videoUrl: null,
+        thumbnail: customThumbUrl || null,
+        thumbnailTime: customThumbUrl ? null : (thumbTime ? Math.round(thumbTime * 10) / 10 : null),
         publicId: uploadId,
         muxUploadId: uploadId,
         muxPlaybackId: null,
@@ -162,7 +222,7 @@ export default function UploadPage() {
           width: 36, height: 36, borderRadius: 10, border: '1px solid var(--gray3)',
           background: 'var(--card)', color: 'var(--gray)', cursor: 'pointer', fontSize: 18,
         }}>‹</button>
-        <h1 style={{ fontWeight: 900, fontSize: 20, color: 'var(--white)' }}>📤 Publier une vidéo</h1>
+        <h1 style={{ fontWeight: 900, fontSize: 20, color: 'var(--white)' }}>{contentType === 'clip' ? 'Clip Details' : contentType === 'flashtuto' ? 'FlashTuto Details' : contentType === 'flashinfo' ? 'FlashInfo Details' : 'GameInDev Details'}</h1>
       </div>
 
       {/* Stepper */}
@@ -247,8 +307,35 @@ export default function UploadPage() {
       {step === 2 && (
         <div>
           {preview && (
-            <div style={{ marginBottom: 24, borderRadius: 12, overflow: 'hidden', background: '#000', aspectRatio: '16/9' }}>
-              <video src={preview} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <div style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden', background: '#000', aspectRatio: '16/9' }}>
+              <video ref={videoRef} src={preview} controls
+                onLoadedMetadata={(e) => setVidDuration(e.currentTarget.duration || 0)}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </div>
+          )}
+
+          {/* Cover / thumbnail — aligned with mobile coverSection */}
+          {preview && (
+            <div style={{ marginBottom: 22, padding: 14, background: 'var(--card)', border: '1px solid var(--gray3)', borderRadius: 12 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 }}>Cover</p>
+              <p style={{ fontSize: 11, color: 'var(--gray)', marginBottom: 12, lineHeight: 1.4 }}>Drag the bar to pick a frame from your clip, or upload your own image.</p>
+              {customThumbUrl ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <img src={customThumbUrl} alt="cover" style={{ width: 80, height: 45, objectFit: 'cover', borderRadius: 8, background: 'var(--gray3)' }} />
+                  <button onClick={() => setCustomThumbUrl(null)} style={{ background: 'none', border: 'none', color: 'var(--red)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Remove custom cover</button>
+                </div>
+              ) : (
+                <div style={{ position: 'relative', height: 26 }}>
+                  <input type="range" min={0} max={vidDuration || 0} step={0.1} value={thumbTime}
+                    onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--gold)', height: 26, cursor: 'pointer' }} />
+                </div>
+              )}
+              <button onClick={() => coverFileRef.current?.click()} disabled={thumbUploading}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', marginTop: 12, padding: '10px 14px', borderRadius: 10, border: '1px solid #C9A84C50', background: 'transparent', color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <span>🖼️</span>{thumbUploading ? 'Uploading…' : 'Upload custom cover'}
+              </button>
+              <input ref={coverFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handlePickCover(e.target.files?.[0])} />
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -260,36 +347,84 @@ export default function UploadPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Titre *</label>
-              <input className="input" placeholder="Nom de ta vidéo" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} maxLength={80} />
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Title *</label>
+              <input className="input" placeholder="Give your clip a title..." value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} maxLength={80} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Genre</label>
-                <select className="input" value={form.genre} onChange={e => setForm(p => ({ ...p, genre: e.target.value, game: '' }))}>
-                  {GENRES.map(g => <option key={g}>{g}</option>)}
-                </select>
+            {/* Genre (drives the game list, aligné avec le mobile) */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Genre</label>
+              <select className="input" value={form.genre}
+                onChange={e => { setForm(p => ({ ...p, genre: e.target.value, game: '' })); setGameSearch(''); setShowCustomGame(false); setCustomGame(''); }}
+                style={{ width: '100%' }}>
+                {GENRES_WITH_GAMES.map(g => <option key={g.id} value={g.id}>{g.icon} {g.label}</option>)}
+              </select>
+            </div>
+
+            {/* Game — searchable list + "my game is not listed" (aligné avec le mobile) */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Game *</label>
+              <input className="input" placeholder="Search game..." value={gameSearch}
+                onChange={e => setGameSearch(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
+              {!showCustomGame && (
+                <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--gray3)', borderRadius: 10, background: 'var(--card)' }}>
+                  {(GENRES_WITH_GAMES.find(g => g.id === form.genre)?.games || [])
+                    .filter(g => gameSearch.length === 0 || g.toLowerCase().includes(gameSearch.toLowerCase()))
+                    .map((g, i) => (
+                      <div key={`${g}_${i}`} onClick={() => setForm(p => ({ ...p, game: g }))}
+                        style={{
+                          padding: '10px 12px', cursor: 'pointer', fontSize: 13,
+                          color: form.game === g ? 'var(--gold)' : 'var(--white)',
+                          background: form.game === g ? 'rgba(201,168,76,0.1)' : 'transparent',
+                          borderBottom: '0.5px solid var(--gray3)',
+                        }}>
+                        🎮 {g}{form.game === g ? '  ✓' : ''}
+                      </div>
+                    ))}
+                </div>
+              )}
+              <div onClick={() => { setShowCustomGame(v => !v); if (!showCustomGame) setForm(p => ({ ...p, game: '' })); }}
+                style={{ marginTop: 8, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(201,168,76,0.35)', background: 'rgba(201,168,76,0.06)', color: 'var(--gold)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                ＋ My game is not listed
               </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Console</label>
-                <select className="input" value={form.console} onChange={e => setForm(p => ({ ...p, console: e.target.value }))}>
-                  <option value="">Sélectionne</option>
-                  {CONSOLES.map(c => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Jeu</label>
-                <select className="input" value={form.game} onChange={e => setForm(p => ({ ...p, game: e.target.value }))}>
-                  <option value="">Sélectionne un jeu</option>
-                  {(GAMES_BY_GENRE[form.genre] || []).map(g => <option key={g}>{g}</option>)}
-                </select>
+              {showCustomGame && (
+                <input className="input" placeholder="Enter game name..." value={customGame}
+                  onChange={e => setCustomGame(e.target.value)} style={{ width: '100%', marginTop: 8 }} autoFocus />
+              )}
+            </div>
+
+            {/* Console — chips (aligné avec le mobile) */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Console *</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {CONSOLES.map(c => (
+                  <button key={c.id} type="button" onClick={() => setForm(p => ({ ...p, console: c.id }))}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5, padding: '8px 12px', borderRadius: 20,
+                      background: form.console === c.id ? 'rgba(201,168,76,0.15)' : 'var(--card)',
+                      border: `1px solid ${form.console === c.id ? 'var(--gold)' : 'var(--gray3)'}`,
+                      color: form.console === c.id ? 'var(--gold)' : 'var(--gray)',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}>
+                    {c.label}
+                  </button>
+                ))}
               </div>
             </div>
 
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Description</label>
-              <textarea className="input resize-none" style={{ height: 90 }} placeholder="Décris ta vidéo (optionnel)" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} maxLength={300} />
+              <textarea className="input resize-none" style={{ height: 90 }} placeholder="Describe your content... use #hashtags" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} maxLength={300} />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Video Frame 🎬</label>
+              <select className="input" value={videoFrame} onChange={e => setVideoFrame(e.target.value)} style={{ width: '100%' }}>
+                {availableVideoFrames.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}{f.id !== 'none' && !f.free && !(userProfile?.ownedVideoFrames || []).includes(f.id) ? ' 👑' : ''}</option>
+                ))}
+              </select>
+              <p style={{ fontSize: 10, color: 'var(--gray)', marginTop: 6, lineHeight: 1.4 }}>Adds a glowing border around your clip in the feed. Unlock more frames in the Shop.</p>
             </div>
 
             {hasFanbase && (
@@ -301,8 +436,8 @@ export default function UploadPage() {
               }}>
                 <span style={{ fontSize: 22 }}>{form.isFanbaseExclusive ? '🔒' : '🌍'}</span>
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--white)' }}>Contenu Fanbase exclusif</p>
-                  <p style={{ fontSize: 11, color: 'var(--gray)' }}>Visible uniquement par tes fans abonnés</p>
+                  <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--white)' }}>Fanbase Exclusive 🔒</p>
+                  <p style={{ fontSize: 11, color: 'var(--gray)' }}>Only visible to your fanbase subscribers</p>
                 </div>
                 <div style={{
                   width: 24, height: 24, borderRadius: 7, border: `2px solid ${form.isFanbaseExclusive ? '#00C853' : 'var(--gray3)'}`,
@@ -313,15 +448,56 @@ export default function UploadPage() {
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+          {/* Content-rights confirmation (mandatory) */}
+          <div onClick={() => setAgreedRights(v => !v)} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', marginTop: 18, cursor: 'pointer',
+            background: agreedRights ? 'rgba(201,168,76,0.08)' : 'var(--card)',
+            border: `1px solid ${agreedRights ? 'rgba(201,168,76,0.4)' : 'var(--gray3)'}`, borderRadius: 12,
+          }}>
+            <div style={{
+              width: 22, height: 22, marginTop: 1, flexShrink: 0, borderRadius: 6,
+              border: `2px solid ${agreedRights ? 'var(--gold)' : 'var(--gray3)'}`,
+              background: agreedRights ? 'var(--gold)' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#000',
+            }}>{agreedRights ? '✓' : ''}</div>
+            <p style={{ fontSize: 12, color: 'var(--gray)', lineHeight: 1.45 }}>
+              I confirm I own or have the rights to all content in this clip (gameplay, music, etc.).{' '}
+              <span onClick={(e) => { e.stopPropagation(); setShowRightsModal(true); }} style={{ color: 'var(--gold)', fontWeight: 700 }}>Content Usage Confirmation ›</span>
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
             <button onClick={() => setStep(1)} style={{
               flex: 1, padding: 14, borderRadius: 12, border: '1px solid var(--gray3)',
               background: 'var(--card)', color: 'var(--gray)', fontWeight: 700, cursor: 'pointer',
-            }}>← Retour</button>
-            <button onClick={handlePublish} disabled={!form.title.trim()} className="btn-gold" style={{ flex: 2, padding: 14, fontWeight: 900, opacity: !form.title.trim() ? 0.5 : 1 }}>
-              🚀 Publier la vidéo
+            }}>← Back</button>
+            <button onClick={handlePublish} disabled={!form.title.trim() || !(showCustomGame ? customGame.trim() : form.game) || !form.console || !agreedRights} className="btn-gold" style={{ flex: 2, padding: 14, fontWeight: 900, opacity: (!form.title.trim() || !(showCustomGame ? customGame.trim() : form.game) || !form.console || !agreedRights) ? 0.5 : 1 }}>
+              🚀 Publish
             </button>
           </div>
+
+          {/* Content Usage Confirmation modal */}
+          {showRightsModal && (
+            <div onClick={() => setShowRightsModal(false)} style={{
+              position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+            }}>
+              <div onClick={(e) => e.stopPropagation()} style={{
+                maxWidth: 480, width: '100%', maxHeight: '80vh', overflowY: 'auto',
+                background: 'var(--card)', border: '1px solid var(--gray3)', borderRadius: 16, padding: 24,
+              }}>
+                <h3 style={{ fontWeight: 900, fontSize: 18, color: 'var(--white)', marginBottom: 14 }}>Content Usage Confirmation</h3>
+                <p style={{ fontSize: 13, color: 'var(--gray)', lineHeight: 1.7 }}>
+                  By posting this clip, you confirm that you own — or have permission to use — all content it contains, including gameplay footage, music, voices, and any third-party material.{'\n\n'}
+                  You are solely responsible for the content you upload. Clips containing material you are not authorized to share may be removed, and repeated violations may lead to account suspension.{'\n\n'}
+                  Do not upload content that infringes copyright, contains hateful, violent, or sexually explicit material, or violates our Community Guidelines.
+                </p>
+                <button onClick={() => { setAgreedRights(true); setShowRightsModal(false); }} className="btn-gold" style={{ width: '100%', padding: 13, fontWeight: 800, marginTop: 20 }}>
+                  I understand & agree
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
